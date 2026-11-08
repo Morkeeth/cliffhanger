@@ -1,0 +1,4 @@
+target/
+__pycache__/
+poc/state.json
+.DS_Store

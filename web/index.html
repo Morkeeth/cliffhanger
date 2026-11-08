@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cliffhanger on NEAR testnet</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,700;1,6..72,300&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:oklch(0.95 0.02 165);--sheet:oklch(0.975 0.012 165);--ink:oklch(0.27 0.06 165);--mute:oklch(0.47 0.035 165);--rule:oklch(0.78 0.035 165);--you:oklch(0.37 0.08 165);--bad:oklch(0.5 0.17 25)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:300 16px/1.5 'Newsreader',serif}
+.num,td,.fig,code{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.page{max-width:1240px;margin:0 auto;padding:32px 40px 64px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px double var(--ink);padding-bottom:16px;margin-bottom:24px;gap:24px}
+.head h1{font-weight:300;font-size:40px;line-height:1;margin:0;letter-spacing:-.02em}
+.head .meta{font-size:14px;color:var(--mute);text-align:right;line-height:1.6}
+h2{font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:32px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:700 11px/1.2 'Newsreader',serif;letter-spacing:.08em;text-transform:uppercase;text-align:right;padding:8px;border-bottom:1px solid var(--ink)}
+td{text-align:right;padding:6px 8px;border-bottom:1px dotted var(--rule)}
+th:first-child,td:first-child,th.l,td.l{text-align:left;font-family:'Newsreader',serif}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink)}
+.tiles>div{padding:16px 24px 16px 0}.tiles>div+div{padding-left:24px;border-left:1px dotted var(--rule)}
+.fig{font-size:34px;font-weight:700;line-height:1.1;letter-spacing:-.02em}
+.cap{font-size:13px;color:var(--mute)}
+.bad{color:var(--bad);font-weight:700}
+a{color:var(--you);text-underline-offset:3px}
+.who{display:flex;gap:12px;align-items:flex-end;margin-top:8px}
+.who input{font:400 14px 'JetBrains Mono',monospace;width:420px;padding:6px 8px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink)}
+.who button{font:700 14px 'Newsreader',serif;padding:8px 16px;background:var(--you);color:var(--paper);border:0;cursor:pointer}
+.notes{margin-top:40px;border-top:1px solid var(--ink);padding-top:8px;font-size:13px;color:var(--mute);columns:2;column-gap:48px}
+.notes p{margin:0 0 6px;break-inside:avoid}
+#err{color:var(--bad);font-size:14px;min-height:20px}
+.q{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-top:8px}
+.q label{font-size:13px;color:var(--mute);display:flex;flex-direction:column;gap:4px}
+.q input,.q select{font:400 14px 'JetBrains Mono',monospace;padding:6px 8px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink)}
+.q input{width:140px}
+.q button{font:700 14px 'Newsreader',serif;padding:8px 16px;background:var(--you);color:var(--paper);border:0;cursor:pointer}
+#qout{margin-top:12px}
+@media (max-width:820px){.page{padding:20px}.tiles{grid-template-columns:1fr 1fr}.notes{columns:1}.who input{width:100%}.tw{overflow-x:auto}}
+</style></head><body><div class="page">
+<div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR testnet. CLIFF is a testnet token with no value.</div></div>
+<div class="meta">Contract <a id="cl" target="_blank" rel="noopener"></a><br>Token <a id="tl" target="_blank" rel="noopener"></a><br><span id="at">Reading the chain…</span></div></div>
+
+<div class="tiles">
+ <div><div class="fig" id="bk">…</div><div class="cap">tokens the contract owes: escrow plus balances</div></div>
+ <div><div class="fig" id="hb">…</div><div class="cap">tokens the contract actually holds</div></div>
+ <div><div class="fig" id="ok">…</div><div class="cap">backing check, read from both contracts</div></div>
+ <div><div class="fig" id="wl">…</div><div class="cap">CLIFF in this holder's own wallet</div></div>
+</div>
+
+<h2>Holder</h2>
+<div class="who"><input id="acct" spellcheck="false" aria-label="Holder account"><button id="go">Read grants</button></div>
+<div id="err"></div>
+<div class="tw"><table id="grants"></table></div>
+
+<h2>What this holder can do today</h2>
+<div class="tw"><table id="opts"></table></div>
+
+<h2>Balances inside the contract</h2>
+<div class="tw"><table id="bals"></table></div>
+
+<h2>Cash out with NEAR Intents: a live quote, nothing sent</h2>
+<div class="cap">When a holder sells a slice or borrows, the cash can arrive as USDC on the chain they use. NEAR Intents has no testnet and CLIFF has no market, so this asks the real 1Click API for a dry-run quote on NEAR: no deposit address is created and nothing moves.</div>
+<div class="q"><label>Amount of NEAR<input id="qa" value="100" inputmode="decimal"></label>
+<label>Receive<select id="qd"><option value="base">USDC on Base</option><option value="arb">USDC on Arbitrum</option><option value="sol">USDC on Solana</option><option value="near">USDC on NEAR</option></select></label>
+<button id="qg">Get a live quote</button></div>
+<div id="qout"><table id="qt"></table></div>
+
+<h2>The end-to-end run, 8 November</h2>
+<div class="tw"><table id="txs"></table></div>
+
+<div class="notes">
+<p>Every number above is read from NEAR testnet when the page loads, through public view calls. Nothing is signed and nothing is stored.</p>
+<p>The holder is paid after the lender: each unlock repays the loan first, fee included, then the rest goes to the holder.</p>
+<p>Tokens enter only by token transfer to the contract and leave only by withdrawal, so what it owes should always equal what it holds.</p>
+<p>Staking is refused in this contract, because its rewards would have no tokens behind them. The earlier demo contract still shows it.</p>
+<p>Unlock days count from 1 January 1970, as NEAR block time does; the date beside each is the same day in UTC.</p>
+<p>The Intents quote is a dry run against the live 1Click API on NEAR mainnet: no deposit address, no transfer, no key. Recipient addresses in the request are placeholders.</p>
+<p>Source and tests: the public repository. Every transaction ID opens in the NEAR testnet explorer.</p>
+</div>
+</div>
+<script>
+const RPC='https://rpc.testnet.near.org';
+const VEST='cliffhanger-vest-8nov.testnet', TOKEN='cliffhanger-token-8nov.testnet';
+const HOLDER='cliffhanger-holder-8nov.testnet', LENDER='cliffhanger-lender-8nov.testnet';
+const EXP=id=>'https://explorer.testnet.near.org/transactions/'+id;
+const ACC=a=>'https://explorer.testnet.near.org/accounts/'+a;
+const TXS=[['Deploy the CLIFF token','AUQEhhtP1fXPnAncG3FRSrmw4Eg2njxF3UsbZ43GRp4i'],['Deploy the funded vesting contract','FodJzhEmqR5aHps2dD2ZwRZQn81PiyWmRBjHSQvrPsoZ'],['Issuer funds grant g1 with 365,000 CLIFF','8TVKCRiF8UE1Wp6CfkBreHWWX9Eg6EKWBAZ61TrEg8Ye'],['Issuer funds grant g2 with 120,000 CLIFF','7jtNGFVGfrF7aUY11MXYcE3foDnp9Q58R9KjahuvzkDC'],['Lender deposits 200,000 CLIFF','EQ1x33qSUYYWjRMnBz7oPssfbsxhnQAcNd23tnAN9oup'],['Holder borrows 50,000 against g1','DUPUu5HnfYdiAgqN1eAh67aMeusGfgvS8Bu1KLDZaPYG'],['Unlock: lender paid 52,712 first, holder gets the rest','8f6EsnaSrGAFYiTTgHyjdJErd547hqozsaC9WTLDPir1']];
+const E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const n=v=>Number(v||0).toLocaleString('en');
+const day=d=>d==null?'none':d+' · '+new Date(d*864e5).toISOString().slice(0,10);
+async function view(contract,method,args){
+ const r=await fetch(RPC,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'c',method:'query',params:{request_type:'call_function',finality:'final',account_id:contract,method_name:method,args_base64:btoa(JSON.stringify(args||{}))}})});
+ const j=await r.json(); if(j.error||j.result?.error)throw new Error(method+': '+(j.result?.error||j.error.message||'RPC error'));
+ return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+}
+function link(el,a){el.textContent=a;el.href=ACC(a)}
+async function load(holder){
+ document.getElementById('err').textContent='';
+ try{
+  const [bk,hb,wl,gr,op,hbal,lbal]=await Promise.all([view(VEST,'backing'),view(TOKEN,'ft_balance_of',{account_id:VEST}),view(TOKEN,'ft_balance_of',{account_id:holder}),view(VEST,'get_grants',{account_id:holder}),view(VEST,'options',{account_id:holder}),view(VEST,'demo_balance',{account_id:holder}).catch(()=>null),view(VEST,'demo_balance',{account_id:LENDER}).catch(()=>null)]);
+  document.getElementById('bk').textContent=n(bk);document.getElementById('hb').textContent=n(hb);
+  const ok=document.getElementById('ok');ok.textContent=bk===hb?'Match':'Mismatch';ok.className='fig'+(bk===hb?'':' bad');
+  document.getElementById('wl').textContent=n(wl);
+  document.getElementById('grants').innerHTML='<tr><th>Grant</th><th>Total</th><th>Vested</th><th>Claimable now</th><th>In escrow</th><th>Commitment</th><th>Next unlock</th></tr>'+(gr.length?gr.map(g=>{const c=g.lien?`Loan from ${E(g.lien.lender)}, owed ${n(g.lien.debt)}`:g.sale?`Slice sold to ${E(g.sale.buyer)}`:g.stake?'Staked':'None';return `<tr><td>${E(g.id)} · ${E(g.title)}${g.cancellable&&!/cancellable/i.test(g.title)?' <span class="cap">(cancellable)</span>':''}</td><td>${n(g.total)}</td><td>${n(g.vested)}</td><td>${n(g.claimable)}</td><td>${n(g.escrow)}</td><td class="l">${c}</td><td>${E(day(g.next_unlock_day))}</td></tr>`}).join(''):'<tr><td colspan="7">No grants for this account.</td></tr>');
+  document.getElementById('opts').innerHTML='<tr><th>Grant</th><th>Unlock now</th><th>Borrow up to</th><th>Sell a slice up to</th><th>Repay</th><th class="l">Why not</th></tr>'+op.map(o=>`<tr><td>${E(o.grant.id)}</td><td>${o.can_claim?'yes':'no'}</td><td>${n(o.borrow.max_advance)}</td><td>${o.can_sell?n(o.max_slice):'not allowed'}</td><td>${o.can_repay?'yes':'no'}</td><td class="l">${E(o.borrow.why_not||(o.grant.cancellable?'A cancellable grant cannot be sold or borrowed against':''))}</td></tr>`).join('');
+  document.getElementById('bals').innerHTML='<tr><th>Account</th><th>Balance in the contract</th></tr>'+[[holder,hbal],[LENDER,lbal]].map(([a,b])=>`<tr><td><a href="${ACC(a)}" target="_blank" rel="noopener">${E(a)}</a></td><td>${b==null?'not registered':n(b)}</td></tr>`).join('');
+  document.getElementById('at').textContent='Read from testnet at '+new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ }catch(e){document.getElementById('err').textContent='Could not read the chain: '+e.message}
+}
+link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKEN);
+document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>';
+
+const ONECLICK='https://1click.chaindefuser.com/v0/quote';
+const DEST={base:['nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN'],arb:['nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN'],sol:['nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near','So11111111111111111111111111111111111111112','DESTINATION_CHAIN'],near:['nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1','near','DESTINATION_CHAIN']};
+function yocto(v){const [w,f='']=String(v).trim().split('.');if(!/^\d+$/.test(w)||!/^\d*$/.test(f))throw new Error('Enter a plain number of NEAR');return (BigInt(w)*10n**24n+BigInt((f+'0'.repeat(24)).slice(0,24))).toString()}
+async function quote(){
+ const t=document.getElementById('qt');t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
+ try{
+  const [asset,to,rt]=DEST[document.getElementById('qd').value];
+  const body={dry:true,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:'nep141:wrap.near',depositType:'ORIGIN_CHAIN',destinationAsset:asset,amount:yocto(document.getElementById('qa').value),refundTo:'near',refundType:'ORIGIN_CHAIN',recipient:to,recipientType:rt,deadline:new Date(Date.now()+30*6e4).toISOString()};
+  const r=await fetch(ONECLICK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();
+  if(!j.quote)throw new Error(j.message||('HTTP '+r.status));
+  const q=j.quote,fee=(j.quoteRequest.appFees||[]).reduce((a,f)=>a+f.fee,0);
+  t.innerHTML='<tr><th>Quote</th><th>Value</th></tr>'+[['You send',q.amountInFormatted+' NEAR ($'+Number(q.amountInUsd).toFixed(2)+')'],['You receive',q.amountOutFormatted+' USDC'],['At least, after 1% slippage',(Number(q.minAmountOut)/1e6).toFixed(6)+' USDC'],['Fee without a 1Click partner key',(fee/100).toFixed(2)+'%'],['Estimated time',q.timeEstimate+' seconds'],['Quoted at',j.timestamp],['Signed by 1Click',String(j.signature).slice(0,24)+'…']].map(([a,b])=>`<tr><td>${E(a)}</td><td>${E(b)}</td></tr>`).join('');
+ }catch(e){t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
+}
+document.getElementById('qg').onclick=quote;
+if(new URLSearchParams(location.search).get('quote'))quote();
+const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
+document.getElementById('go').onclick=()=>load(inp.value.trim());
+load(inp.value.trim());
+</script></body></html>

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Cliffhanger: three statement dashboards</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,700;1,6..72,300&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:oklch(0.95 0.02 165);--sheet:oklch(0.975 0.012 165);--ink:oklch(0.27 0.06 165);--mute:oklch(0.47 0.035 165);--rule:oklch(0.78 0.035 165);
+ --you:oklch(0.37 0.08 165);--them:oklch(0.84 0.045 165);--earn:oklch(0.62 0.11 125);--bad:oklch(0.5 0.17 25)}
+*{box-sizing:border-box}
+body{margin:0;min-width:1240px;background:var(--paper);color:var(--ink);font:300 16px/1.5 'Newsreader',serif}
+.num,td,.fig{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.pick{position:sticky;top:0;z-index:5;display:flex;gap:4px;padding:8px 24px;background:var(--ink)}
+.pick button{all:unset;cursor:pointer;color:oklch(0.85 0.03 165);font:700 13px/1 'Newsreader',serif;padding:8px 12px}
+.pick button.on{background:var(--paper);color:var(--ink)}
+.dir{display:none}.dir.on{display:block}
+.page{max-width:1360px;margin:0 auto;padding:32px 40px 64px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px double var(--ink);padding-bottom:16px;margin-bottom:24px}
+.head h1{font-weight:300;font-size:40px;line-height:1;margin:0;letter-spacing:-.02em}
+.head .meta{font-size:14px;color:var(--mute);text-align:right;line-height:1.6}
+.seg{display:flex;gap:24px;margin:0 0 24px;font-size:16px}
+.seg a{cursor:pointer;padding-bottom:4px;border-bottom:1px solid transparent;color:var(--mute)}
+.seg a.on{color:var(--ink);font-weight:700;border-bottom:3px solid var(--you)}
+.seg a.off{opacity:.4;cursor:not-allowed}
+h2{font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font:700 11px/1.2 'Newsreader',serif;letter-spacing:.08em;text-transform:uppercase;text-align:right;padding:8px 8px;border-bottom:1px solid var(--ink)}
+td{text-align:right;padding:6px 8px;border-bottom:1px dotted var(--rule)}
+th:first-child,td:first-child{text-align:left;font-family:'Newsreader',serif}
+tr.total td{border-top:1px solid var(--ink);border-bottom:3px double var(--ink);font-weight:700}
+.bad{color:var(--bad);font-weight:700}
+.fig{font-size:40px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.cap{font-size:13px;color:var(--mute);font-family:'Newsreader',serif;font-weight:300}
+.notes{margin-top:32px;border-top:1px solid var(--ink);padding-top:8px;font-size:13px;color:var(--mute);columns:2;column-gap:48px}
+.notes p{margin:0 0 6px;break-inside:avoid}
+sup{font:700 10px 'JetBrains Mono',monospace;color:var(--mute)}
+svg{display:block;width:100%;height:auto}
+.d1{display:grid;grid-template-columns:240px 1fr 300px;gap:40px}
+.acct{cursor:pointer;padding:12px 0;border-bottom:1px dotted var(--rule)}
+.acct.on{border-left:3px solid var(--you);padding-left:12px}
+.acct b{display:block;font-weight:700}
+.sum div{padding:12px 0;border-bottom:1px dotted var(--rule)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);margin-bottom:32px}
+.tiles>div{padding:16px 24px 16px 0}.tiles>div+div{padding-left:24px;border-left:1px dotted var(--rule)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
+.col{border-top:1px solid var(--ink);padding-top:12px}.col.worst{border-top:4px solid var(--bad)}
+.go{cursor:pointer;color:var(--you);text-decoration:underline;text-underline-offset:3px;font-family:'Newsreader',serif;font-size:13px;margin-right:12px}
+.add{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-top:24px;padding-top:12px;border-top:1px solid var(--ink)}
+.add label{font-size:13px;color:var(--mute);display:flex;flex-direction:column;gap:4px}
+.add input{font:400 14px 'JetBrains Mono',monospace;width:130px;padding:6px 8px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink)}
+.add button{font:700 14px 'Newsreader',serif;padding:8px 16px;background:var(--you);color:var(--paper);border:0;cursor:pointer}
+#adderr{color:var(--bad);font-size:13px;min-height:18px}
+</style></head><body>
+<div class="pick"><button data-d="d2" class="on">Treasury desk</button><button data-d="d1">Statement</button><button data-d="d3">Three paths</button></div>
+<div class="dir on" id="d2"></div><div class="dir" id="d1"></div><div class="dir" id="d3"></div>
+<script>
+const P = __DATA__;
+const fmt = n => Math.round(n).toLocaleString('en');
+const sgn = n => (n > 0 ? '+' : n < 0 ? '-' : '') + fmt(Math.abs(n));
+const NAMES = {hold: 'Wait', sell: 'Sell a slice', borrow: 'Borrow', stake: 'Stake and earn'};
+const WORST = {hold: 'waiting', sell: 'selling a slice', borrow: 'borrowing', stake: 'staking'};
+const PATHS = {down: 'Price falls', flat: 'Price holds', up: 'Price rises'};
+const st = {pos: 0, choice: 'sell'};
+
+// Month by month, same rules as the engine: the counterparty is paid first from each unlock.
+function monthly(x, choice) {
+  const {locked: q, months_left: m, cliff_months_left: c} = x.pos, a = x.plan.assumptions;
+  const lockedAt = i => i >= m ? 0 : i < c ? q : q * (m - i) / m;
+  const owed = choice === 'sell' ? q * a.slice.value : choice === 'borrow' ? q * a.loan_ltv.value * (1 + a.loan_apr.value * m / 12) : 0;
+  let paid = 0;
+  return Array.from({length: m}, (_, i) => {
+    const unlock = lockedAt(i) - lockedAt(i + 1), them = Math.min(unlock, Math.max(owed - paid, 0));
+    paid += them;
+    return {month: i + 1, unlock, them, you: unlock - them, reward: choice === 'stake' ? lockedAt(i) * a.stake_yield.value / 12 : 0, left: lockedAt(i + 1)};
+  });
+}
+function avail(x, k) { return k === 'hold' || k === 'stake' || !x.pos.cancellable; }
+function stairs(x, choice, scale = 1, h = 260, norm = scale) {
+  const L = monthly(x, choice), W = 760, bw = W / L.length, base = h - 22;
+  const top = x.pos.locked * norm, sc = (h - 40) / top;
+  let you = 0, them = 0, s = '';
+  L.forEach((r, i) => {
+    you += r.you * scale; them += r.them * scale; const xx = i * bw + 1, w = bw - 2;
+    s += `<rect x="${xx}" y="${base - you * sc}" width="${w}" height="${you * sc}" fill="var(--you)"/>`;
+    s += `<rect x="${xx}" y="${base - (you + them) * sc}" width="${w}" height="${them * sc}" fill="var(--them)"/>`;
+    if ((i + 1) % (L.length > 12 ? 3 : 1) === 0) s += `<text x="${xx + w / 2}" y="${h - 6}" text-anchor="middle" font-size="11" fill="var(--mute)" font-family="JetBrains Mono">${i + 1}</text>`;
+  });
+  if (choice === 'stake') {
+    let r = 0; const pts = L.map((row, i) => { r += row.reward * scale; return `${i * bw + bw / 2},${base - r * 8 * sc}`; });
+    s += `<polyline points="${pts.join(' ')}" fill="none" stroke="var(--earn)" stroke-width="2"/>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${h}" role="img" aria-label="Unlock staircase">${s}<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--ink)"/></svg>`;
+}
+function seg(x) {
+  return `<div class="seg">${Object.keys(NAMES).map(k => avail(x, k)
+    ? `<a class="${k === choice(x) ? 'on' : ''}" onclick="st.choice='${k}';draw()">${NAMES[k]}</a>`
+    : `<a class="off" title="${x.plan.unavailable}">${NAMES[k]}</a>`).join('')}</div>`;
+}
+function head(title, x) {
+  return `<div class="head"><h1>${title}</h1><div class="meta">Cliffhanger on NEAR · account alice, demo<br>Price basis ${x.pos.price_now.toFixed(2)} a token, demo<sup>6</sup></div></div>`;
+}
+const NOTES = `<div class="notes">
+ <p><sup>1</sup> Sale discount: the median OFFX reports for the time left until unlock, in The Block, 5 Apr 2026. Between 25 and 35 months OFFX gives no figure, so you enter one.</p>
+ <p><sup>2</sup> Price falls: Keyrock's average for team unlocks, applied here as the end price. Using it as the end price is our modelling choice.</p>
+ <p><sup>3</sup> Staking yield: a demo default, as reported after NEAR One cut maximum inflation on 21 Oct 2025. You can enter your own. Assumes you claim each unlock as it arrives.</p>
+ <p><sup>4</sup> Borrow limit and fee: Cliffhanger demo values, not a market price. Each unlock repays the lender first.</p>
+ <p><sup>5</sup> Price rises: a symmetric demo path, not a forecast.</p>
+ <p><sup>6</sup> Prices and the account are demo. The two grants come from the demo contract state; the ecosystem fund is a demo position.</p></div>`;
+function choice(x) { return avail(x, st.choice) ? st.choice : 'hold'; }
+
+function d1() {
+  const x = P[st.pos], k = choice(x), L = monthly(x, k), h = x.plan.holder, w = x.plan.worst_holder;
+  const accts = P.map((p, i) => `<div class="acct ${i === st.pos ? 'on' : ''}" onclick="st.pos=${i};draw()"><b>${p.title}</b><span class="num">${fmt(p.pos.locked)}</span> <span class="cap">locked · ${p.pos.months_left} months${p.pos.cancellable ? ' · issuer can cancel' : ''}</span></div>`).join('');
+  const rows = L.map(r => `<tr><td>Month ${r.month}</td><td>${r.unlock ? fmt(r.unlock) : ''}</td><td>${r.them ? fmt(r.them) : ''}</td><td>${r.you ? fmt(r.you) : ''}</td><td>${r.reward ? fmt(r.reward) : ''}</td><td>${fmt(r.left)}</td></tr>`).join('');
+  const sum = f => L.reduce((a, r) => a + r[f], 0);
+  const cp = k === 'sell' ? 'To buyer' : k === 'borrow' ? 'To lender' : 'To others';
+  const legend = k === 'sell' || k === 'borrow' ? `Dark: unlocks that reach you. Pale: unlocks that go to the ${k === 'sell' ? 'buyer' : 'lender'} first.` : k === 'stake' ? 'Every unlock reaches you. Green line: rewards so far, drawn at eight times scale.' : 'Every unlock reaches you.';
+  return `<div class="page">${head('Vesting statement', x)}<div class="d1">
+   <div><h2>Grants</h2>${accts}</div>
+   <div>${seg(x)}${stairs(x, k)}<p class="cap">${legend}</p>
+    <table><tr><th>Period</th><th>Unlocks</th><th>${cp}</th><th>To you</th><th>Rewards<sup>3</sup></th><th>Still locked</th></tr>${rows}
+    <tr class="total"><td>Total, tokens</td><td>${fmt(sum('unlock'))}</td><td>${fmt(sum('them'))}</td><td>${fmt(sum('you'))}</td><td>${fmt(sum('reward'))}</td><td>0</td></tr></table></div>
+   <div class="sum"><h2>${NAMES[k]}</h2>
+    <div><span class="cap">Cash now</span><br><span class="fig">${fmt(h.flat[k].cash_now)}</span></div>
+    <div><span class="cap">Worth at the end if the price holds</span><br><span class="fig">${fmt(h.flat[k].total)}</span></div>
+    <div><span class="cap">Against waiting</span><br><span class="fig ${h.flat[k].vs_hold < 0 ? 'bad' : ''}">${sgn(h.flat[k].vs_hold)}</span></div>
+    <div><span class="cap">If the price falls<sup>2</sup></span><br><span class="fig ${w.choice === k ? 'bad' : ''}">${fmt(h.down[k].total)}</span></div>
+    <p class="cap">Worst case on this grant: ${WORST[w.choice]} when the price falls, ${fmt(w.total)}.</p></div>
+  </div>${NOTES}</div>`;
+}
+
+function d2() {
+  const tot = f => P.reduce((a, x) => a + f(x), 0);
+  const value = tot(x => x.pos.locked * x.pos.price_now);
+  const sellCash = tot(x => x.plan.holder.flat.sell ? x.plan.holder.flat.sell.cash_now : 0);
+  const loanCash = tot(x => x.plan.holder.flat.borrow ? x.plan.holder.flat.borrow.cash_now : 0);
+  const stake = tot(x => x.plan.holder.flat.stake.rewards_value);
+  const spark = x => { const L = monthly(x, 'hold'); let c = 0; const mx = x.pos.locked; return `<svg viewBox="0 0 120 28" style="width:120px">${L.map((r, i) => { c += r.unlock; const hh = 26 * c / mx; return `<rect x="${i * 120 / L.length}" y="${27 - hh}" width="${120 / L.length - 1}" height="${hh}" fill="var(--you)"/>`; }).join('')}</svg>`; };
+  const cell = (x, k, f) => x.plan.holder.flat[k] ? fmt(f(x.plan.holder.flat[k])) : '<span class="cap">not offered</span>';
+  const rows = P.map(x => { const w = x.plan.worst_holder; return `<tr><td><b>${x.title}</b>${x.from === 'demo' ? ' <span class="cap">demo position</span>' : x.from === 'user' ? ' <span class="cap">you entered it</span>' : ''}<br><span class="cap">${x.pos.months_left} months · ${x.pos.cancellable ? 'issuer can cancel' : 'cannot be cancelled'}${x.committed ? ' · already ' + x.committed : ''}</span><br><a class="go" onclick="open_('d1',${P.indexOf(x)})">Statement</a><a class="go" onclick="open_('d3',${P.indexOf(x)})">Three paths</a></td>
+    <td>${spark(x)}</td><td>${fmt(x.pos.locked)}</td><td>${cell(x, 'sell', r => r.cash_now)}<br><span class="cap">${x.plan.holder.flat.sell ? Math.round(x.plan.assumptions.sale_discount.value * 100) + '% off<sup>1</sup>' : ''}</span></td>
+    <td>${cell(x, 'borrow', r => r.cash_now)}</td><td>${cell(x, 'stake', r => r.rewards_value)}</td><td class="bad">${fmt(w.total)}<br><span class="cap">${WORST[w.choice]}, price falls</span></td></tr>`; }).join('');
+  const g = (x, s, k) => x.plan.funder[s][k].gain;
+  const frows = P.filter(x => x.plan.funder.flat.buy_slice).map(x => `<tr><td>${x.title}</td>${['buy_slice', 'lend'].map(k => ['down', 'flat', 'up'].map(s => `<td class="${g(x, s, k) < 0 ? 'bad' : ''}">${sgn(g(x, s, k))}</td>`).join('')).join('')}</tr>`).join('');
+  return `<div class="page">${head('Treasury desk', P[0])}
+   <div class="tiles"><div><span class="cap">Locked, at the price basis</span><br><span class="fig">${fmt(value)}</span></div>
+    <div><span class="cap">Cash now by selling slices<sup>1</sup></span><br><span class="fig">${fmt(sellCash)}</span></div>
+    <div><span class="cap">Cash now by borrowing<sup>4</sup></span><br><span class="fig">${fmt(loanCash)}</span></div>
+    <div><span class="cap">Staking rewards over the terms<sup>3</sup></span><br><span class="fig">${fmt(stake)}</span></div></div>
+   <h2>Holding seat</h2>
+   <table><tr><th>Position</th><th>Schedule</th><th>Locked</th><th>Sell a slice, cash</th><th>Borrow, cash</th><th>Stake, rewards</th><th>Worst case<sup>2</sup></th></tr>${rows}</table>
+   <h2 style="margin-top:32px">Funding seat: what a buyer or lender makes</h2>
+   <table><tr><th>Position</th><th>Buy, falls</th><th>Buy, holds</th><th>Buy, rises<sup>5</sup></th><th>Lend, falls</th><th>Lend, holds</th><th>Lend, rises</th></tr>${frows}</table>
+   <p class="cap">A cancellable grant can vanish, so it backs no sale and no loan. The money moves the same way in reverse: what the holder gives up, the funder makes.</p>
+   ${ADD}${NOTES}</div>`;
+}
+
+function d3() {
+  const x = P[st.pos], k = choice(x), w = x.plan.worst_holder;
+  const tabs = `<div class="seg">${P.map((p, i) => `<a class="${i === st.pos ? 'on' : ''}" onclick="st.pos=${i};draw()">${p.title}</a>`).join('')}</div>`;
+  const weakest = ['down', 'flat', 'up'].reduce((a, s) => x.plan.holder[s][k].total < x.plan.holder[a][k].total ? s : a, 'down');
+  const cols = ['down', 'flat', 'up'].map(s => { const r = x.plan.holder[s][k], p = x.plan.paths[s];
+    return `<div class="col ${s === weakest ? 'worst' : ''}"><h2>${PATHS[s]}<sup>${s === 'down' ? 2 : s === 'up' ? 5 : 6}</sup></h2>
+     <span class="cap">End price ${p.price.toFixed(2)}</span>${stairs(x, k, p.price / x.pos.price_now, 200, x.plan.paths.up.price / x.pos.price_now)}
+     <table><tr><td>Cash now</td><td>${fmt(r.cash_now)}</td></tr><tr><td>Tokens you keep, valued</td><td>${fmt(r.kept_value)}</td></tr>
+     <tr><td>Rewards, valued</td><td>${fmt(r.rewards_value)}</td></tr><tr class="total"><td>Worth at the end</td><td class="${s === w.scenario && k === w.choice ? 'bad' : ''}">${fmt(r.total)}</td></tr>
+     <tr><td>Against waiting</td><td class="${r.vs_hold < 0 ? 'bad' : ''}">${sgn(r.vs_hold)}</td></tr></table></div>`; }).join('');
+  return `<div class="page">${head('Three price paths', x)}${tabs}${seg(x)}
+   <div class="cols">${cols}</div>
+   <p class="cap" style="margin-top:16px">Bar height follows each path's end price. A red rule marks the weakest path for this choice. Worst case on this position: ${WORST[w.choice]} when the price falls, ${fmt(w.total)}.</p>
+   ${NOTES}</div>`;
+}
+const ADD = `<h2 style="margin-top:32px">Plan another position</h2><div class="add">
+ <label>Locked tokens<input id="a-locked" type="number" value="500000"></label>
+ <label>Price now<input id="a-price" type="number" step="0.01" value="2"></label>
+ <label>Months left<input id="a-months" type="number" value="18"></label>
+ <label>Months to cliff<input id="a-cliff" type="number" value="0"></label>
+ <label>Sale discount, if you know it<input id="a-disc" type="number" step="0.01" placeholder="from OFFX"></label>
+ <label><span><input id="a-canc" type="checkbox" style="width:auto"> Issuer can cancel</span></label>
+ <button onclick="addPos()">Add to the desk</button></div><div id="adderr"></div>`;
+async function addPos() {
+  const v = id => document.getElementById(id).value, err = document.getElementById('adderr');
+  const q = new URLSearchParams({locked: v('a-locked'), price: v('a-price'), months: v('a-months'), cliff: v('a-cliff')});
+  if (document.getElementById('a-canc').checked) q.set('cancellable', '1');
+  if (v('a-disc')) q.set('sale_discount', v('a-disc'));
+  try {
+    const r = await fetch('/api/plan?' + q), j = await r.json();
+    if (!r.ok) { err.textContent = j.error; return; }
+    P.push({id: 'u' + P.length, title: 'Your position', from: 'user', committed: null,
+      pos: {locked: +v('a-locked'), price_now: +v('a-price'), months_left: +v('a-months'), cliff_months_left: +v('a-cliff'), cancellable: document.getElementById('a-canc').checked}, plan: j});
+    draw();
+  } catch (e) { err.textContent = 'Adding a position needs the local server: python3 server.py, then open /desk.'; }
+}
+function open_(d, i) { st.pos = i; draw(); document.querySelector(`[data-d="${d}"]`).click(); scrollTo(0, 0); }
+function draw() { for (const [id, f] of [['d1', d1], ['d2', d2], ['d3', d3]]) document.getElementById(id).innerHTML = f(); }
+draw();
+document.querySelectorAll('.pick button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.pick button,.dir').forEach(e => e.classList.remove('on'));
+  b.classList.add('on'); document.getElementById(b.dataset.d).classList.add('on');
+});
+const q = new URLSearchParams(location.search);
+if (q.get('c')) { st.choice = q.get('c'); draw(); }
+if (q.get('d')) document.querySelector(`[data-d="${q.get('d')}"]`).click();
+</script></body></html>

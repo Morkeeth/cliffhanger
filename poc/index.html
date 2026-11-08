@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vesting loan POC</title>
+<style>
+:root{--ink:#16181d;--mute:#6b7280;--line:#e5e7eb;--bg:#fafaf9;--accent:#0f766e;--warn:#b45309}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 -apple-system,system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+main{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}.sub{color:var(--mute);margin:0 0 20px}
+.demo{display:inline-block;font-size:12px;border:1px solid var(--warn);color:var(--warn);border-radius:4px;padding:1px 6px;margin-left:6px}
+.row{display:flex;gap:16px;flex-wrap:wrap}.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;flex:1 1 300px}
+.card h2{font-size:16px;margin:0 0 10px}.k{color:var(--mute);font-size:13px}.n{font-variant-numeric:tabular-nums;font-weight:600}
+table{width:100%;border-collapse:collapse}td{padding:3px 0}td:last-child{text-align:right}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--accent)}
+button{font:inherit;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink)}button:disabled{opacity:.35;cursor:not-allowed}
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.why{color:var(--mute);font-size:13px;margin-top:6px}
+input{font:inherit;width:120px;padding:5px 8px;border:1px solid var(--line);border-radius:6px}
+.lien{border-left:3px solid var(--accent);padding:8px 10px;margin-top:10px;background:#f0fdfa;font-size:14px}
+.short{color:var(--warn);font-weight:600}.log{font-size:13px;color:var(--mute)}.log div{padding:2px 0;border-bottom:1px dashed var(--line)}
+#err{color:#b91c1c;min-height:20px;margin:8px 0}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 16px}
+</style></head><body><main>
+<h1>You have tokens that unlock later. Here is what you can do today.</h1>
+<p class="sub">Borrow against your vesting grant. Each unlock pays the lender first, until you are clear. <span class="demo" id="label">DEMO</span></p>
+<div class="top"><div>Signed in as <b>alice</b> (demo account) · Day <b class="n" id="day">0</b> · Wallet <b class="n" id="wal">0</b></div>
+<div><button class="ghost" onclick="act('advance',{days:30})">+30 days</button> <button class="ghost" onclick="act('advance',{days:90})">+90 days</button> <button class="ghost" onclick="reset()">Reset demo</button></div></div>
+<div id="err"></div>
+<div class="row" id="grants"></div>
+<div class="row" style="margin-top:16px">
+ <div class="card"><h2>Pending transfers</h2><div id="tx" class="log"></div></div>
+ <div class="card"><h2>What happened</h2><div id="ev" class="log"></div></div>
+ <div class="card" style="flex:0 1 240px"><h2>Other parties</h2><div id="others" class="log"></div>
+ <div class="opts"><button class="ghost" onclick="act('cancel',{actor:'dao.treasury',grant:'g2'})">Issuer cancels g2</button></div></div>
+</div>
+</main><script>
+const fmt=n=>Number(n).toLocaleString('en');
+async function call(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok){document.getElementById('err').textContent=j.error;return null}document.getElementById('err').textContent='';return j}
+async function act(a,d){const v=await call('/api/act/'+a,Object.assign({actor:'alice'},d));if(v)render(v)}
+async function reset(){render(await call('/api/reset',{}))}
+async function preview(g){const a=+document.getElementById('amt-'+g).value||0;const p=await call(`/api/preview?grant=${g}&amount=${a}`);if(p)document.getElementById('pv-'+g).innerHTML=p.within_limit?`Cash now <b>${fmt(p.cash_now)}</b> · fee ${fmt(p.fee)} · repay <b>${fmt(p.repay_total)}</b><br>${p.repaid_by}.<br>If the issuer cancels: ${p.if_cancelled}.`:'<span class="short">Outside the borrow limit.</span>'}
+function grantCard(g,v){const pct=g.total?Math.round(100*g.vested/g.total):0;const b=g.options.borrow;const L=g.lien;
+const tx=v.transfers.find(t=>t.grant===g.id&&t.state==='pending');
+return `<div class="card"><h2>${g.title} <span class="k">${g.id}</span></h2>
+<div class="bar"><i style="width:${pct}%"></i></div>
+<table><tr><td class="k">Total</td><td class="n">${fmt(g.total)}</td></tr><tr><td class="k">Vested</td><td class="n">${fmt(g.vested)}</td></tr>
+<tr><td class="k">Claimable now</td><td class="n">${fmt(g.claimable)}</td></tr><tr><td class="k">Still locked</td><td class="n">${fmt(g.unvested)}</td></tr>
+<tr><td class="k">Next</td><td>${g.cancelled?'cancelled':g.next_unlock}</td></tr><tr><td class="k">Issuer can cancel</td><td>${g.cancellable?'yes':'no'}</td></tr></table>
+${L?`<div class="lien">Pledged to <b>${L.lender}</b>. Debt left <b class="n">${fmt(L.debt)}</b> of ${fmt(L.principal+L.fee)} · repaid by unlocks ${fmt(L.repaid_by_unlocks)}, by you ${fmt(L.repaid_by_holder)}${L.reserved?`<br>${fmt(L.reserved)} is on its way to the lender in the pending claim`:''}${L.shortfall?`<br><span class="short">Shortfall after cancellation: ${fmt(L.shortfall)}</span>`:''}</div>`:''}
+<div class="opts"><button ${g.options.claim&&!tx?'':'disabled'} onclick="act('claim',{grant:'${g.id}'})">Claim</button>
+${tx?`<button onclick="act('resolve',{grant:'${g.id}',transfer:'${tx.id}',ok:true})">Simulate success</button><button class="ghost" onclick="act('resolve',{grant:'${g.id}',transfer:'${tx.id}',ok:false})">Simulate failure</button>`:''}
+${g.options.repay?`<input id="rp-${g.id}" type="number" value="${L.debt-L.reserved}"> <button class="ghost" onclick="act('repay',{grant:'${g.id}',amount:+document.getElementById('rp-${g.id}').value})">Pay off</button>`:''}</div>
+${b.available?`<div class="opts"><input id="amt-${g.id}" type="number" value="${Math.floor(b.max_advance/2)}" oninput="preview('${g.id}')"><button onclick="act('borrow',{grant:'${g.id}',amount:+document.getElementById('amt-${g.id}').value})">Borrow</button></div><div class="why">Up to <b>${fmt(b.max_advance)}</b> (${b.ltv_pct}% of locked value)</div><div class="why" id="pv-${g.id}"></div>`:`<div class="why">Borrow: ${b.why_not}</div>`}</div>`}
+function render(v){if(!v)return;document.getElementById('label').textContent=v.label;document.getElementById('day').textContent=v.day;document.getElementById('wal').textContent=fmt(v.wallets.alice);
+document.getElementById('grants').innerHTML=v.grants.map(g=>grantCard(g,v)).join('');v.grants.forEach(g=>{if(g.options.borrow.available)preview(g.id)});
+document.getElementById('tx').innerHTML=v.transfers.map(t=>`<div>${t.id} · ${t.grant} · ${fmt(t.amount)} · ${t.state}</div>`).join('')||'<div>none</div>';
+document.getElementById('ev').innerHTML=v.events.slice().reverse().map(e=>`<div>day ${e.day} · ${e.text}</div>`).join('')||'<div>nothing yet</div>';
+document.getElementById('others').innerHTML=Object.entries(v.wallets).filter(([k])=>k!=='alice').map(([k,n])=>`<div>${k}: ${fmt(n)}</div>`).join('')}
+call('/api/state').then(render);
+</script></body></html>
