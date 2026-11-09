@@ -12,6 +12,14 @@ A treasury planner shows every choice under three price paths: price falls, hold
 
 Built for the NEAR hackathon (1 to 14 Nov 2026).
 
+## Open the live testnet viewer
+
+https://morkeeth.github.io/cliffhanger/
+
+This page reads the funded contract from NEAR testnet. It does not connect a wallet or sign transactions. Choose a holder and load grants; see contract backing, actual token balance and available actions. The Intents quote is a mainnet dry run, with no transfer.
+
+The treasury planner below runs locally and remains distinct from this on-chain viewer.
+
 ## Try it: do X, see Y
 
 Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unknown-unknown` target.
