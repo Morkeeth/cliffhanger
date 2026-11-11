@@ -1,6 +1,7 @@
 """Loopback-only demo server for the NEAR vesting-loan POC. python3 server.py [--port 8931]"""
 import json, os, sys, tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import intents
 import loan
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,21 +27,14 @@ def view(s, account='alice'):
     return {'day': s['day'], 'label': s['labels']['note'], 'wallets': s['wallets'],
             'grants': loan.options(s, account), 'transfers': s['transfers'][-6:],
             'events': s['events'][-12:],
+            'aurora': intents.aurora_cards(),
             'liens': {k: g['lien'] for k, g in s['grants'].items()}}
 
 
 DESK = os.path.join(HERE, 'dashboards.src.html')
 PRICE_BASIS = 2.0   # demo price for CLIFF rows; the page labels it demo
-# Demo price near the AURORA token quoted by NEAR Intents. Not a live feed.
-AURORA_PRICE = 0.04
 DEMO_FUND = {'id': 't1', 'title': 'Ecosystem fund allocation', 'from': 'demo', 'token': 'CLIFF',
              'pos': {'locked': 2_000_000, 'price_now': PRICE_BASIS, 'months_left': 24, 'cliff_months_left': 6, 'cancellable': False, 'token': 'CLIFF'}}
-AURORA_BOOK = [
-    {'id': 'aur1', 'title': 'Aurora ecosystem grant', 'from': 'demo', 'token': 'AURORA',
-     'pos': {'locked': 1_000_000, 'price_now': AURORA_PRICE, 'months_left': 18, 'cliff_months_left': 3, 'cancellable': False, 'token': 'AURORA'}},
-    {'id': 'aur2', 'title': 'Aurora contributor, half the term left', 'from': 'demo', 'token': 'AURORA',
-     'pos': {'locked': 400_000, 'price_now': AURORA_PRICE, 'months_left': 9, 'cliff_months_left': 0, 'cancellable': False, 'token': 'AURORA'}},
-]
 
 
 def desk_data(s):
@@ -52,16 +46,40 @@ def desk_data(s):
         days_left = g['start'] + g['duration'] - s['day']
         if left <= 0 or days_left <= 0:
             continue
-        pos = {'locked': left, 'price_now': PRICE_BASIS, 'months_left': max(1, math.ceil(days_left / 30.42)),
+        pos = {'locked': left, 'vested': loan.vested(g, s['day']), 'price_now': PRICE_BASIS,
+               'months_left': max(1, math.ceil(days_left / 30.42)),
                'cliff_months_left': max(0, math.ceil((g['start'] + g['cliff'] - s['day']) / 30.42)),
                'cancellable': g['cancellable'], 'token': g.get('token', 'CLIFF')}
         committed = 'borrowed' if g.get('lien') else 'sold a slice' if g.get('sale') else 'staked' if g.get('stake') else None
         out.append({'id': gid, 'title': g['title'].replace(' (cancellable)', ''), 'from': 'engine',
                     'token': pos['token'], 'committed': committed, 'pos': pos, 'plan': planner.plan(pos)})
     out.append(dict(DEMO_FUND, committed=None, plan=planner.plan(DEMO_FUND['pos'])))
-    for row in AURORA_BOOK:
-        out.append(dict(row, committed=None, plan=planner.plan(row['pos'])))
+    for g in intents.AURORA_GRANTS:
+        if g['unvested'] <= 0 or g['months_left'] <= 0:
+            continue
+        pos = {'locked': g['unvested'], 'vested': g['vested'], 'price_now': intents.AURORA_DEMO_PRICE,
+               'months_left': g['months_left'], 'cliff_months_left': g['cliff_months_left'],
+               'cancellable': g['cancellable'], 'token': 'AURORA'}
+        out.append({'id': g['id'], 'title': g['title'], 'from': 'demo', 'token': 'AURORA',
+                    'committed': None, 'pos': pos, 'plan': planner.plan(pos)})
     return out
+
+
+def intent_plan(s, q):
+    """Size a demo choice. The browser posts the returned dry requests. This process does not."""
+    grant, choice = q['grant'], q['choice']
+    card = next((c for c in intents.aurora_cards() if c['id'] == grant), None)
+    if card is None:
+        held = [o for o in loan.options(s, 'alice') if o['id'] == grant]
+        if not held:
+            raise ValueError('Unknown grant')
+        card = held[0]
+    amount = int(q['amount']) if q.get('amount') else None
+    slice_tokens = int(q['slice']) if q.get('slice') else None
+    return intents.plan_position(
+        intents.position_from_card(card), choice,
+        price=q.get('price'), amount=amount, slice_tokens=slice_tokens,
+        entered_discount=q.get('discount'))
 
 
 class H(BaseHTTPRequestHandler):
@@ -88,6 +106,13 @@ class H(BaseHTTPRequestHandler):
             q = parse_qs(urlparse(self.path).query)
             p = loan.preview_borrow(load(), q['grant'][0], int(q['amount'][0]))
             return self._send(200, p)
+        if self.path.startswith('/api/intent-plan'):
+            from urllib.parse import urlparse, parse_qs
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            try:
+                return self._send(200, intent_plan(load(), q))
+            except (KeyError, ValueError) as e:
+                return self._send(400, {'error': str(e)})
         if self.path.startswith('/api/plan'):
             from urllib.parse import urlparse, parse_qs
             import planner

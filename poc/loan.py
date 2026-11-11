@@ -5,6 +5,9 @@ translation, not a redesign. Every action copies state first; a rejected action 
 """
 from copy import deepcopy
 
+from intents import months_left
+from planner import offx_discount
+
 LTV_FIXED = 40          # percent of unvested value a non-cancellable grant can borrow
 LTV_CANCELLABLE = 0     # cancellable grants can vanish, so they cannot back a loan
 APR = 12                # demo flat annual fee, percent; not a market price
@@ -129,6 +132,8 @@ def options(state, account):
         if g['holder'] != account:
             continue
         q = quote(g, day)
+        months = months_left(q['term_days'])
+        discount = offx_discount(months) if months else None
         free = not encumbrance(g) and g['cancelled_at'] is None
         if unvested(g, day) == 0 and g['cancelled_at'] is None:
             nxt = 'fully vested'
@@ -145,14 +150,15 @@ def options(state, account):
             'options': {
                 'claim': claimable(g, day) > 0,
                 'borrow': {'available': q['max_advance'] > 0, 'max_advance': q['max_advance'],
-                           'ltv_pct': q['ltv_pct'],
+                           'ltv_pct': q['ltv_pct'], 'term_days': q['term_days'],
                            'why_not': None if q['max_advance'] > 0 else
                            ('already committed' if encumbrance(g) else
                             'cancellable grants cannot back a loan' if g['cancellable'] else
                             'nothing left unvested')},
                 'repay': bool(g['lien'] and g['lien']['debt'] - reserved(state, gid) > 0),
                 'sell': {'available': free and not g['cancellable'] and unvested(g, day) > 0,
-                         'max_slice': unvested(g, day) if free and not g['cancellable'] else 0},
+                         'max_slice': unvested(g, day) if free and not g['cancellable'] else 0,
+                         'discount': discount, 'months_left': months},
                 'stake': {'available': free and g['escrow'] > 0, 'yield_bp': STAKE_BP,
                           'collect': bool(g.get('stake') and g['stake']['unpaid'] > 0)},
             },

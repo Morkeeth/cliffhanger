@@ -45,4 +45,4 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 
 ## Not done
 - **Agent key:** a function-call key on the holder, limited to `unlock, withdraw, borrow, repay, sell_slice` on the vesting contract, so an agent can act and cannot touch the rest of the wallet. Not created yet.
-- **Hosted desk:** `web/index.html` is published at https://morkeeth.github.io/cliffhanger/. It reads these accounts from the testnet RPC. A choice on a live grant is priced into NEAR and quoted, dry, through NEAR Intents to AURORA on NEAR, AURORA on Ethereum, and USDC on Base.
+- **Hosted desk:** `web/index.html` reads these accounts from the testnet RPC. A live choice uses the grant's remaining term for the OFFX discount, then a dry NEAR Intents quote to AURORA on NEAR, AURORA on Ethereum, and USDC on Base. A local vested AURORA schedule is quoted by sending the AURORA token. The vesting contract stays on testnet. https://morkeeth.github.io/cliffhanger/ updates when this file is merged; this change does not deploy or merge.
