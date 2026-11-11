@@ -32,7 +32,9 @@ fn deposit_grows_supply_by_exactly_the_tokens_received() {
 #[test]
 fn unlock_pays_the_lender_first_then_the_holder_inside_the_contract() {
     let s = funded_grant().deposit("lena.lender", 100_000).unwrap();
+    let s = s.set_lendable("lena.lender", 50_000).unwrap();
     let s = s.borrow("alice", "g1", 50_000, "lena.lender").unwrap();
+    assert_eq!(s.lendable_of("lena.lender"), 0);
     let debt = s.grant("g1").unwrap().lien.as_ref().unwrap().debt;
     let s = at(s, 200).unlock_internal("alice", "g1").unwrap();
     let vested = 365_000 * 200 / 365;
@@ -69,7 +71,7 @@ fn ctx(predecessor: &str) {
     testing_env!(b.build());
 }
 fn funded_contract() -> Contract {
-    ctx("deployer.test");
+    ctx("contract.test");
     Contract::new_funded("token.test".parse().unwrap())
 }
 fn grant_msg() -> String {
@@ -104,4 +106,58 @@ fn funded_contract_refuses_the_demo_claim() {
 fn funded_contract_refuses_unbacked_staking() {
     let mut c = funded_contract();
     c.stake("g1".into());
+}
+
+#[test]
+fn a_holder_cannot_borrow_from_someone_who_never_offered() {
+    let s = funded_grant().deposit("victim.near", 100_000).unwrap();
+    let before = s.clone();
+    assert!(s.borrow("alice", "g1", 10_000, "victim.near").is_err());
+    let s2 = s.ensure_wallet("bob").unwrap();
+    assert!(s2.sell_slice("alice", "g1", 10_000, 10_000, "victim.near").is_err());
+    assert_eq!(s, before);
+}
+#[test]
+fn a_buyer_pays_only_up_to_the_offer() {
+    let s = funded_grant().deposit("bea.buyer", 100_000).unwrap();
+    let s = s.set_lendable("bea.buyer", 6_000).unwrap();
+    assert!(s.sell_slice("alice", "g1", 10_000, 6_001, "bea.buyer").is_err());
+    let s = s.sell_slice("alice", "g1", 10_000, 6_000, "bea.buyer").unwrap();
+    assert_eq!(s.balance("bea.buyer").unwrap(), 94_000);
+    assert_eq!(s.lendable_of("bea.buyer"), 0);
+}
+#[test]
+fn an_empty_unreferenced_wallet_makes_room_for_a_new_one() {
+    let mut s = funded_grant();
+    let mut i = 0;
+    while s.wallets.len() < 64 {
+        s = s.ensure_wallet(&format!("spam{i}.near")).unwrap();
+        i += 1;
+    }
+    let s = s.ensure_wallet("real.near").expect("an idle slot must be freed");
+    assert!(s.wallets.contains_key("real.near"));
+    assert!(s.wallets.contains_key("alice"), "a grant holder is never evicted");
+}
+
+#[test]
+#[should_panic(expected = "only the contract account can initialize it")]
+fn a_stranger_cannot_initialize_the_contract_first() {
+    ctx("attacker.test");
+    Contract::new_funded("evil-token.test".parse().unwrap());
+}
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn moving_value_needs_a_wallet_confirmation() {
+    let mut c = funded_contract();
+    ctx("alice.test");
+    c.sell_slice("g1".into(), U128(1), U128(1), "attacker.test".parse().unwrap());
+}
+#[test]
+fn an_offer_deposit_lets_holders_draw_only_that_amount() {
+    let mut c = funded_contract();
+    ctx("token.test");
+    c.ft_on_transfer("lena.test".parse().unwrap(), U128(40_000), r#"{"action":"offer"}"#.into());
+    c.ft_on_transfer("sam.test".parse().unwrap(), U128(40_000), r#"{"action":"deposit"}"#.into());
+    assert_eq!(c.lendable("lena.test".parse().unwrap()).0, 40_000);
+    assert_eq!(c.lendable("sam.test".parse().unwrap()).0, 0);
 }

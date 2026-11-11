@@ -157,7 +157,7 @@ fn invalid_leg_or_actor_does_not_mutate() {
 }
 #[test]
 fn public_demo_initializer_keeps_ft_disabled() {
-    testing_env!(context("alice", 0));
+    testing_env!(context(SELF, 0));
     let c = Contract::new_demo(BTreeMap::from([(
         account("alice"),
         near_sdk::json_types::U128(1),
@@ -367,9 +367,9 @@ fn state_growth_caps_reject_before_changing_original() {
             .resolve_ft_leg(SELF, id, 1, false)
             .unwrap();
     }
-    let before = s.clone();
-    assert!(s.claim_ft("alice", "g1").is_err());
-    assert_eq!(s, before);
+    // Settled transfers are pruned, so unlocks keep working past the retained limit.
+    let (next, _) = s.claim_ft("alice", "g1").expect("claim 129 must not lock the escrow");
+    assert!(next.transfers.len() <= 2);
 }
 #[test]
 fn bounded_large_fixture_callback_completes_in_native_mock_only() {
@@ -416,7 +416,7 @@ fn bounded_large_fixture_callback_completes_in_native_mock_only() {
         funded: false,
     };
     drop(c.claim("g1".into()));
-    assert_eq!(c.engine.transfers.len(), 128);
+    assert!(c.engine.transfers.len() <= 128);
     let bytes = near_sdk::borsh::to_vec(&c).unwrap().len();
     assert!(
         bytes <= 512 * 1024,

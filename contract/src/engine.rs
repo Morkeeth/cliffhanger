@@ -186,6 +186,8 @@ pub struct Engine {
     pub grants: BTreeMap<String, Grant>,
     pub transfers: BTreeMap<u64, Transfer>,
     pub supply: Amount,
+    /// What each account has agreed to lend or pay for a slice. A holder can draw on nothing else.
+    pub lendable: BTreeMap<String, Amount>,
     next_transfer: u64,
     next_lien: u64,
 }
@@ -193,7 +195,9 @@ impl Engine {
     pub fn new(contract: String, wallets: BTreeMap<String, Amount>, day: u64) -> Result<Self> {
         need(wallets.len() <= 64, "demo wallet limit")?;
         let supply = wallets.values().try_fold(0, |a, &b| add(a, b))?;
+        let lendable = wallets.clone();
         Ok(Self {
+            lendable,
             day,
             contract,
             wallets,
@@ -203,6 +207,54 @@ impl Engine {
             next_transfer: 1,
             next_lien: 1,
         })
+    }
+    fn draw_offer(&mut self, account: &str, amount: Amount, message: &str) -> Result<()> {
+        let offer = self.lendable.get(account).copied().unwrap_or(0);
+        need(amount <= offer, message)?;
+        if offer == amount {
+            self.lendable.remove(account);
+        } else {
+            self.lendable.insert(account.into(), offer - amount);
+        }
+        Ok(())
+    }
+    /// Set how much of `account`'s balance a holder may draw as a loan or a slice payment. Only the account itself calls this.
+    pub fn set_lendable(&self, account: &str, amount: Amount) -> Result<Self> {
+        need(self.wallets.contains_key(account), "unknown account")?;
+        let mut s = self.clone();
+        if amount == 0 {
+            s.lendable.remove(account);
+        } else {
+            s.lendable.insert(account.into(), amount);
+        }
+        s.checked()
+    }
+    pub fn lendable_of(&self, account: &str) -> Amount {
+        self.lendable.get(account).copied().unwrap_or(0)
+    }
+    /// A settled transfer has nothing in flight; dropping it keeps unlocks working past the retained limit.
+    fn prune_settled_transfers(&mut self) {
+        let live = |st: &TransferState| matches!(st, TransferState::Pending | TransferState::NeedsReconcile);
+        self.transfers.retain(|_, t| {
+            if t.legs.is_empty() { live(&t.state) } else { live(&t.state) || t.legs.iter().any(|l| live(&l.state)) }
+        });
+    }
+    /// Free one wallet slot held by an empty account that no grant, loan, sale or offer refers to.
+    fn evict_idle_wallet(&mut self) {
+        let referenced = |a: &str, grants: &BTreeMap<String, Grant>, lendable: &BTreeMap<String, Amount>| {
+            lendable.contains_key(a)
+                || grants.values().any(|g| {
+                    g.holder == a || g.issuer == a || g.counterparty().is_some_and(|(who, _, _)| who == a)
+                })
+        };
+        let idle = self
+            .wallets
+            .iter()
+            .find(|(a, &b)| b == 0 && *a != &self.contract && !referenced(a, &self.grants, &self.lendable))
+            .map(|(a, _)| a.clone());
+        if let Some(a) = idle {
+            self.wallets.remove(&a);
+        }
     }
     pub fn needs_reconcile(&self, id: &str) -> bool {
         self.transfers
@@ -427,6 +479,7 @@ impl Engine {
         let fee = q.fee_for(amount)?;
         let debt = add(amount, fee)?;
         let mut s = self.clone();
+        s.draw_offer(lender, amount, "lender has not offered this much")?;
         s.debit(lender, amount)?;
         s.credit(actor, amount)?;
         let lien_id = s.next_lien;
@@ -454,7 +507,9 @@ impl Engine {
             "only holder, lender or buyer claims",
         )?;
         need(g.pending == 0, "claim already pending")?;
-        need(self.transfers.len() < 128, "retained transfer limit")?;
+        let mut s = self.clone();
+        s.prune_settled_transfers();
+        need(s.transfers.len() < 128, "retained transfer limit")?;
         let amount = g.claimable(self.day)?;
         need(amount > 0, "nothing claimable")?;
         let (lender, reserved, lien_id) = match g.counterparty() {
@@ -463,7 +518,6 @@ impl Engine {
         };
         g.escrow = g.escrow.checked_sub(amount).ok_or("insufficient escrow")?;
         g.pending = add(g.pending, amount)?;
-        let mut s = self.clone();
         let tid = s.next_transfer;
         s.next_transfer = tid.checked_add(1).ok_or("transfer id overflow")?;
         s.transfers.insert(
@@ -723,6 +777,7 @@ impl Engine {
         need(price > 0 && price <= slice, "price must be positive and at most the slice")?;
         need(buyer != actor, "holder cannot buy from self")?;
         let mut s = self.clone();
+        s.draw_offer(buyer, price, "buyer has not offered this much")?;
         s.debit(buyer, price)?;
         s.credit(actor, price)?;
         let sale_id = s.next_commitment_id()?;
@@ -790,6 +845,9 @@ impl Engine {
         need(!account.is_empty() && account.len() <= 64, "invalid account")?;
         let mut s = self.clone();
         if !s.wallets.contains_key(account) {
+            if s.wallets.len() >= 64 {
+                s.evict_idle_wallet();
+            }
             need(s.wallets.len() < 64, "demo wallet limit")?;
             s.wallets.insert(account.into(), 0);
         }

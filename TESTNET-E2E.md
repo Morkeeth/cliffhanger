@@ -46,3 +46,42 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 ## Not done
 - **Agent key:** a function-call key on the holder, limited to `unlock, withdraw, borrow, repay, sell_slice` on the vesting contract, so an agent can act and cannot touch the rest of the wallet. Not created yet.
 - **Hosted desk:** `web/index.html` reads these accounts from the testnet RPC. A live choice uses the grant's remaining term for the OFFX discount, then a dry NEAR Intents quote to AURORA on NEAR, AURORA on Ethereum, and USDC on Base. A local vested AURORA schedule is quoted by sending the AURORA token. The vesting contract stays on testnet. https://morkeeth.github.io/cliffhanger/ updates when this file is merged; this change does not deploy or merge.
+
+# Hardened contract on testnet (11 Nov 2026)
+
+An independent review found three ways to lose funds and one init race. All four are fixed, and this run proves the fixes on chain. New faucet accounts, keys in the macOS keychain. Reproduce with `scripts/deploy-and-prove.sh`.
+
+## What changed in the contract
+- **Consent.** A holder can borrow or sell a slice only from an account that offered. Lenders and buyers deposit with `{"action":"offer"}` or call `set_lendable`. Before, a holder could name any account and take its balance.
+- **Wallet confirmation.** `borrow`, `sell_slice`, `repay`, `cancel`, `withdraw`, `create_grant`, `unstake` and `set_lendable` need exactly 1 yoctoNEAR, so a leaked function-call key cannot move value.
+- **No permanent lock.** Settled transfers are pruned, so unlocks keep working after 128 of them. Before, the 129th unlock failed for everyone. An empty wallet that nothing refers to can give up its slot.
+- **Init race.** The token and the vesting contract can be initialized only by their own account, inside the deploy transaction.
+
+## Accounts
+| Role | Account |
+|---|---|
+| Token CLIFF (fixed supply, no value) | `ch11-tok.testnet` |
+| Funded vesting contract | `ch11-vest.testnet` |
+| Issuer | `ch11-iss.testnet` |
+| Holder | `ch11-hold.testnet` |
+| Lender | `ch11-lend.testnet` |
+
+## Transactions
+| Step | Tx |
+|---|---|
+| Deploy and init token in one transaction | DcvrjuCc4hotzLu2fsDsNYpQQUxbKt4zEgswWVQHUnGT |
+| Deploy and init vesting in one transaction | 2gfXMpHCrPRsDcVhSfSwtBsj1JghKyKKTQStBwMciCFq |
+| Issuer funds grant g1, 365,000 CLIFF | EhCd4nHJdjFcCy6ibzoUoC7WSuLfNnn5Vf8Sz6Ea5Ph9 |
+| Lender deposits 200,000 CLIFF as an offer | 6hqrTRd97ttKUZJmcbqyg9LgoZEepEDe1Kc3Kn2nA5CE |
+| Refused: borrow without 1 yoctoNEAR | "Requires attached deposit of exactly 1 yoctoNEAR" |
+| Refused: sell a slice to the issuer, who never offered | "buyer has not offered this much" |
+| Refused: a second init | "The contract has already been initialized" |
+| Holder borrows 50,000 from the offer | 2oqecHgBujhWFC6x7K7XGzUqHSVzN7QS1sGmowwVgb6R |
+| Unlock: lender paid first (202,712 inside), holder 197,288 | oJbvw1FpPq8Yzkc3G6HfxkCdmsBQUf7mnZXajbwwH9L |
+| Holder withdraws 197,288 CLIFF to own wallet | tLsk34Rc35BfPZfwUtjEDKCH1tC6ASr8EDZN4fvD52n |
+| **Check:** `backing()` = 367,712 = `ft_balance_of(contract)` | view calls |
+
+## Still true
+- The contract account's full-access key can redeploy the code, so whoever holds it can drain the contract. There is no owner method, pause or sweep. Tokens sent with a plain `ft_transfer` are stranded.
+- The grant limit is 32 and the wallet limit is 64. Only accounts holding CLIFF can fill them, and the demo keeps the whole supply with the issuer.
+- Stake and collect_rewards stay refused in funded mode.

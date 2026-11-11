@@ -264,6 +264,7 @@ impl Contract {
     /// Synthetic balances only. Not an asset deposit or a token issuance endpoint.
     #[init]
     pub fn new_demo(demo_balances: BTreeMap<AccountId, U128>) -> Self {
+        assert_eq!(env::predecessor_account_id(), env::current_account_id(), "only the contract account can initialize it, in the deploy transaction");
         let wallets = demo_balances
             .into_iter()
             .map(|(a, v)| (a.to_string(), v.0))
@@ -283,6 +284,7 @@ impl Contract {
     /// through `withdraw`, so the contract's token balance always equals `backing()`.
     #[init]
     pub fn new_funded(token_contract: AccountId) -> Self {
+        assert_eq!(env::predecessor_account_id(), env::current_account_id(), "only the contract account can initialize it, in the deploy transaction");
         Self {
             engine: checked(Engine::new(
                 env::current_account_id().to_string(),
@@ -321,6 +323,10 @@ impl Contract {
                 m.duration.unwrap_or_else(|| env::panic_str("duration required")),
                 m.cancellable.unwrap_or(false),
             ));
+        } else if m.action == "offer" {
+            // Deposit and agree that holders may draw this much as a loan or a slice payment.
+            let offered = model.lendable_of(sender_id.as_str()).checked_add(amount.0).unwrap_or_else(|| env::panic_str("offer overflow"));
+            model = checked(model.set_lendable(sender_id.as_str(), offered));
         } else if m.action != "deposit" {
             env::panic_str("unknown action");
         }
@@ -336,7 +342,9 @@ impl Contract {
         );
     }
     /// Funded mode: send real tokens from your Cliffhanger balance to your wallet.
+    #[payable]
     pub fn withdraw(&mut self, amount: U128) -> Promise {
+        near_sdk::assert_one_yocto();
         assert!(self.funded, "withdraw needs the funded contract");
         assert!(
             env::prepaid_gas().as_gas() >= Gas::from_tgas(60).as_gas(),
@@ -367,10 +375,24 @@ impl Contract {
         }
         ok
     }
+    /// Agree that holders may draw up to `amount` of your Cliffhanger balance as a loan or a slice payment.
+    /// Nobody can lend or buy with your balance unless you set this. 0 withdraws the offer.
+    #[payable]
+    pub fn set_lendable(&mut self, amount: U128) {
+        near_sdk::assert_one_yocto();
+        self.engine = checked(
+            self.current()
+                .set_lendable(env::predecessor_account_id().as_str(), amount.0),
+        );
+    }
+    pub fn lendable(&self, account_id: AccountId) -> U128 {
+        U128(self.engine.lendable_of(account_id.as_str()))
+    }
     /// Tokens this contract must hold: custodial balances plus escrow plus in-flight claims.
     pub fn backing(&self) -> U128 {
         U128(self.engine.supply)
     }
+    #[payable]
     pub fn create_grant(
         &mut self,
         grant_id: String,
@@ -382,6 +404,7 @@ impl Contract {
         duration: u64,
         cancellable: bool,
     ) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(self.current().create_grant(
             env::predecessor_account_id().as_str(),
             &grant_id,
@@ -397,7 +420,9 @@ impl Contract {
     pub fn quote(&self, grant_id: String, amount: Option<U128>) -> QuoteView {
         Self::quote_view(&self.current(), &grant_id, amount.map(|a| a.0))
     }
+    #[payable]
     pub fn borrow(&mut self, grant_id: String, amount: U128, lender: AccountId) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(self.current().borrow(
             env::predecessor_account_id().as_str(),
             &grant_id,
@@ -498,7 +523,9 @@ impl Contract {
         self.reconciliations.values().cloned().collect()
     }
     /// Choice 1: sell the next `slice` unlocked tokens of a grant to `buyer` for `price` now.
+    #[payable]
     pub fn sell_slice(&mut self, grant_id: String, slice: U128, price: U128, buyer: AccountId) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(self.current().sell_slice(
             env::predecessor_account_id().as_str(),
             &grant_id,
@@ -522,20 +549,26 @@ impl Contract {
                 .collect_rewards(env::predecessor_account_id().as_str(), &grant_id),
         );
     }
+    #[payable]
     pub fn unstake(&mut self, grant_id: String) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(
             self.current()
                 .unstake(env::predecessor_account_id().as_str(), &grant_id),
         );
     }
+    #[payable]
     pub fn repay(&mut self, grant_id: String, amount: U128) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(self.current().repay(
             env::predecessor_account_id().as_str(),
             &grant_id,
             amount.0,
         ));
     }
+    #[payable]
     pub fn cancel(&mut self, grant_id: String) {
+        near_sdk::assert_one_yocto();
         self.engine = checked(
             self.current()
                 .cancel(env::predecessor_account_id().as_str(), &grant_id),
@@ -587,7 +620,7 @@ impl Contract {
     }
     pub fn accounting_mode(&self) -> String {
         if self.funded {
-            return "FUNDED: balances and escrow backed by real testnet tokens; see backing()".into();
+            return "FUNDED: balances and escrow backed one-for-one by the configured token; see backing()".into();
         }
         "DEMO ONLY: synthetic balances; FT adapter disabled by public initializer; no funded deployment".into()
     }
