@@ -50,15 +50,15 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
 1. Run the engine and planner tests.
    ```
    cd poc
-   python3 test_loan.py && python3 test_choices.py && python3 test_planner.py
+   python3 test_loan.py && python3 test_choices.py && python3 test_planner.py && python3 test_intents.py
    ```
-   You see `OK` three times: 12 loan tests, 10 choice tests, 10 planner tests.
+   You see `OK` four times: 12 loan tests, 10 choice tests, 10 planner tests, 8 intent tests. The intent tests build dry quote requests and do not call the network.
 
 2. Start the local demo.
    ```
    python3 server.py --port 8931
    ```
-   Open http://127.0.0.1:8931. You see five CLIFF grants: one still in its cliff, one not yet vesting, one already vesting, one fully vested, and one the issuer can cancel. Borrow, sell a slice, stake, claim, and step time forward with **+30 days**. Each claim pays the lender or the buyer first.
+   Open http://127.0.0.1:8931. You see five CLIFF grants: one still in its cliff, one not yet vesting, one already vesting, one fully vested, and one the issuer can cancel. Borrow, sell a slice, stake, claim, and step time forward with **+30 days**. Each claim pays the lender or the buyer first. The 24-month hire sells at 50% off; a grant with a year or less left sells at 40% off. Below those cards are three AURORA grants, two already vesting and one fully vested. They are not in the CLIFF ledger. **Dry quote** on a card asks NEAR Intents for that choice. A CLIFF quote spends NEAR at the price you enter. An AURORA quote spends the AURORA token.
 
 3. Ask the planner about a position.
    ```
@@ -67,7 +67,7 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
    You see each choice under three price paths. `worst_holder` names the worst case: selling a slice when the price falls.
 
 4. Open the treasury desk.
-   Open http://127.0.0.1:8931/desk. You see every still-locked position, including two demo AURORA grants, with cash available now by each choice and the worst case in red. The fully vested grant is on the action page, because nothing remains locked to plan. Each row opens its month-by-month statement and its three price paths. Add your own position at the bottom.
+   Open http://127.0.0.1:8931/desk. You see every still-locked position, including two AURORA grants that have already started vesting. The row shows how much is still locked and how much has vested. Cash available now is listed by each choice, and the worst case is in red. Fully vested grants, the finished CLIFF grant and the finished AURORA grant, are on the action page, because nothing remains locked to plan. Each row opens its month-by-month statement and its three price paths. Add your own position at the bottom.
 
 5. Test the contract.
    ```
@@ -77,7 +77,7 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
    You see 43 tests pass. To build the deployable WASM, see contract/README.md.
 
 6. Open the on-chain page.
-   Open `web/index.html` in a browser, or https://morkeeth.github.io/cliffhanger/ after this folder is published. It reads the live testnet contract directly: what the contract owes, what it holds, the holder's grants and what they can do today. Choose a grant and a choice. The page prices that CLIFF amount in NEAR at the figure you enter and asks NEAR Intents for three dry-run quotes of that amount: AURORA on NEAR, AURORA on Ethereum, and USDC on Base. A table under that shows more vesting shapes. Those rows are local. They are not extra tokens on the contract.
+   Open `web/index.html` in a browser. It reads the live testnet contract directly: what the contract owes, what it holds, the holder's grants and what they can do today. Choose a live grant or a local row, then a choice. A CLIFF choice is priced in NEAR at the figure you enter. The sale uses the OFFX discount for the months still left (`term_days` on a live grant). The page asks NEAR Intents for three dry quotes: AURORA on NEAR, AURORA on Ethereum, and USDC on Base. A local AURORA row is quoted by sending that AURORA token to wNEAR, to AURORA on Ethereum, and to USDC on Base. The table under the quote is the local book, not extra tokens on the contract. https://morkeeth.github.io/cliffhanger/ serves this file only after it is merged. This change does not merge or deploy.
 
 ## On NEAR testnet
 
@@ -115,7 +115,7 @@ You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 
 ## What is not built
 
-- **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The on-chain page asks the 1Click API for dry-run quotes sized to a real grant choice, including the AURORA token on NEAR and on Ethereum. Aurora's own chain is not in the live token list, so the page does not invent a route there. Nothing is sent. The vesting contract is not on mainnet: the escrow is unaudited, testnet is enough for this hackathon, and the only mainnet call is that dry quote.
+- **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The demo and the on-chain page ask the 1Click API for dry quotes sized to a real choice. CLIFF choices can arrive as the AURORA token on NEAR or on Ethereum, or as USDC on Base. A vested AURORA grant is quoted by sending the AURORA token. Aurora's own chain is not in the live token list, so the page does not invent a route there. Stake is not quoted: it pays demo rewards, not cash Intents can swap. Nothing is sent. The vesting contract is not on mainnet: the escrow is unaudited, testnet is enough for this hackathon, and the only mainnet call is that dry quote.
 - **Published wallet journey.** The release candidate adds testnet MyNearWallet connect, unlock and withdrawal. It has automated controller checks; a real browser wallet signature and final token receipt are still unproven. The existing GitHub Pages viewer stays read-only.
 - **A real staking pool.** The demo contract mints demo rewards. The funded contract refuses to stake, because those rewards would have no tokens behind them.
 
