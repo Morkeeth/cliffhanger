@@ -1,4 +1,4 @@
-//! CLIFF: a testnet-only NEP-141 demo token for Cliffhanger. No value. The whole supply goes to `owner_id`.
+//! CLIFF: a NEP-141 demo token for Cliffhanger. It has no value and no mint after init. The whole supply goes to `owner_id`.
 use near_contract_standards::fungible_token::metadata::{
     FungibleTokenMetadata, FungibleTokenMetadataProvider, FT_METADATA_SPEC,
 };
@@ -21,13 +21,14 @@ pub struct Contract {
 impl Contract {
     #[init]
     pub fn new(owner_id: AccountId, total_supply: U128) -> Self {
+        assert_eq!(near_sdk::env::predecessor_account_id(), near_sdk::env::current_account_id(), "only the token account can initialize it, in the deploy transaction");
         let mut token = FungibleToken::new(b"t".to_vec());
         token.internal_register_account(&owner_id);
         token.internal_deposit(&owner_id, total_supply.0);
         near_contract_standards::fungible_token::events::FtMint {
             owner_id: &owner_id,
             amount: total_supply,
-            memo: Some("Cliffhanger testnet demo supply"),
+            memo: Some("Cliffhanger demo supply, no value"),
         }
         .emit();
         Self { token }
@@ -108,7 +109,7 @@ impl FungibleTokenMetadataProvider for Contract {
     fn ft_metadata(&self) -> FungibleTokenMetadata {
         FungibleTokenMetadata {
             spec: FT_METADATA_SPEC.to_string(),
-            name: "Cliffhanger testnet demo token".to_string(),
+            name: "Cliffhanger demo token (no value)".to_string(),
             symbol: "CLIFF".to_string(),
             icon: None,
             reference: None,
