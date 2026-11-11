@@ -45,4 +45,4 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 
 ## Not done
 - **Agent key:** a function-call key on the holder, limited to `unlock, withdraw, borrow, repay, sell_slice` on the vesting contract, so an agent can act and cannot touch the rest of the wallet. Not created yet.
-- **Hosted desk:** `web/index.html` reads these accounts from the testnet RPC and runs a NEAR Intents dry-run quote. It is not hosted yet.
+- **Hosted desk:** `web/index.html` is published at https://morkeeth.github.io/cliffhanger/. It reads these accounts from the testnet RPC. A choice on a live grant is priced into NEAR and quoted, dry, through NEAR Intents to AURORA on NEAR, AURORA on Ethereum, and USDC on Base.

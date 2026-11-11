@@ -17,6 +17,16 @@ class LoanJourney(unittest.TestCase):
         self.assertEqual(o['g1']['options']['borrow']['max_advance'], 146000)
         self.assertFalse(o['g2']['options']['borrow']['available'])
         self.assertEqual(o['g2']['options']['borrow']['why_not'], 'cancellable grants cannot back a loan')
+        self.assertEqual(o['g3']['vested'], 240000 * 180 // 365)
+        self.assertGreater(o['g3']['claimable'], 0)
+        self.assertGreater(o['g3']['options']['borrow']['max_advance'], 0)
+        self.assertEqual(o['g4']['unvested'], 0)
+        self.assertEqual(o['g4']['claimable'], 80000)
+        self.assertEqual(o['g4']['next_unlock'], 'fully vested')
+        self.assertEqual(o['g4']['options']['borrow']['why_not'], 'nothing left unvested')
+        self.assertEqual(o['g5']['vested'], 0)
+        self.assertEqual(o['g5']['options']['borrow']['max_advance'], 200000)
+        apply(s, 'advance', {'actor': 'alice', 'days': 1})
 
     def test_full_self_repaying_path(self):
         s = initial()

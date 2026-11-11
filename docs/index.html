@@ -58,12 +58,18 @@ a{color:var(--you);text-underline-offset:3px}
 <h2>Balances inside the contract</h2>
 <div class="tw"><table id="bals"></table></div>
 
-<h2>Cash out with NEAR Intents: a live quote, nothing sent</h2>
-<div class="cap">When a holder sells a slice or borrows, the cash can arrive as USDC on the chain they use. NEAR Intents has no testnet and CLIFF has no market, so this asks the real 1Click API for a dry-run quote on NEAR: no deposit address is created and nothing moves.</div>
-<div class="q"><label>Amount of NEAR<input id="qa" value="100" inputmode="decimal"></label>
-<label>Receive<select id="qd"><option value="base">USDC on Base</option><option value="arb">USDC on Arbitrum</option><option value="sol">USDC on Solana</option><option value="near">USDC on NEAR</option></select></label>
-<button id="qg">Get a live quote</button></div>
+<h2>Cash a choice out with NEAR Intents</h2>
+<div class="cap">Pick a live grant and a choice. The page turns that many CLIFF into NEAR at the price you enter, then asks the 1Click API for three dry quotes of that same amount: AURORA on NEAR, AURORA on Ethereum, and USDC on Base. Aurora's own chain is not in the live token list. The AURORA token is, and that is what these two routes deliver. CLIFF has no market, so the NEAR price is one you enter. Nothing is sent and no deposit address is created.</div>
+<div class="q"><label>Grant<select id="qgrant"></select></label>
+<label>Choice<select id="qchoice"><option value="borrow">Borrow the maximum</option><option value="sell">Sell a quarter of what is locked, at 40% off</option><option value="claim">Cash what has already vested</option></select></label>
+<label>NEAR per CLIFF, you entered it<input id="qpx" value="0.0001" inputmode="decimal"></label>
+<button id="qg">Quote this choice</button></div>
+<div id="qmeta" class="cap"></div>
 <div id="qout"><table id="qt"></table></div>
+
+<h2>More vesting shapes, local only</h2>
+<div class="cap">The funded contract still holds the two CLIFF grants above. These rows are extra schedules so the book shows a cliff, a half-vested grant, a finished grant, and a second token. They are not on chain. Minting more CLIFF needs the issuer key, which this page does not have.</div>
+<div class="tw"><table id="book"></table></div>
 
 <h2>The end-to-end run, 8 November</h2>
 <div class="tw"><table id="txs"></table></div>
@@ -74,7 +80,9 @@ a{color:var(--you);text-underline-offset:3px}
 <p>Tokens enter only by token transfer to the contract and leave only by withdrawal, so what it owes should always equal what it holds.</p>
 <p>Staking is refused in this contract, because its rewards would have no tokens behind them. The earlier demo contract still shows it.</p>
 <p>Unlock days count from 1 January 1970, as NEAR block time does; the date beside each is the same day in UTC.</p>
-<p>The Intents quote is a dry run against the live 1Click API on NEAR mainnet: no deposit address, no transfer, no key. Recipient addresses in the request are placeholders.</p>
+<p>The Intents quotes are dry runs against the live 1Click API. The vesting contract stays on testnet. It is not deployed on mainnet: the escrow is unaudited, and a dry quote is the mainnet call this demo makes.</p>
+<p>AURORA routes use the asset ids NEAR Intents publishes: the bridged AURORA token on NEAR, and the same token on Ethereum. Recipient addresses in the request are placeholders.</p>
+<p>The 40% sale discount is the OFFX band for a term up to 12 months. This page does not read months remaining from the contract, so every slice quote uses that short-term band.</p>
 <p>Source and tests: <a href="https://github.com/Morkeeth/cliffhanger">the public repository</a>. Every transaction ID opens in the NEAR testnet explorer.</p>
 </div>
 </div>
@@ -104,6 +112,8 @@ async function load(holder){
   document.getElementById('grants').innerHTML='<tr><th>Grant</th><th>Total</th><th>Vested</th><th>Claimable now</th><th>In escrow</th><th>Commitment</th><th>Next unlock</th></tr>'+(gr.length?gr.map(g=>{const c=g.lien?`Loan from ${E(g.lien.lender)}, owed ${n(g.lien.debt)}`:g.sale?`Slice sold to ${E(g.sale.buyer)}`:g.stake?'Staked':'None';return `<tr><td>${E(g.id)} · ${E(g.title)}${g.cancellable&&!/cancellable/i.test(g.title)?' <span class="cap">(cancellable)</span>':''}</td><td>${n(g.total)}</td><td>${n(g.vested)}</td><td>${n(g.claimable)}</td><td>${n(g.escrow)}</td><td class="l">${c}</td><td>${E(day(g.next_unlock_day))}</td></tr>`}).join(''):'<tr><td colspan="7">No grants for this account.</td></tr>');
   document.getElementById('opts').innerHTML='<tr><th>Grant</th><th>Unlock now</th><th>Borrow up to</th><th>Sell a slice up to</th><th>Repay</th><th class="l">Why not</th></tr>'+op.map(o=>`<tr><td>${E(o.grant.id)}</td><td>${o.can_claim?'yes':'no'}</td><td>${n(o.borrow.max_advance)}</td><td>${o.can_sell?n(o.max_slice):'not allowed'}</td><td>${o.can_repay?'yes':'no'}</td><td class="l">${E(o.borrow.why_not||(o.grant.cancellable?'A cancellable grant cannot be sold or borrowed against':''))}</td></tr>`).join('');
   document.getElementById('bals').innerHTML='<tr><th>Account</th><th>Balance in the contract</th></tr>'+[[holder,hbal],[LENDER,lbal]].map(([a,b])=>`<tr><td><a href="${ACC(a)}" target="_blank" rel="noopener">${E(a)}</a></td><td>${b==null?'not registered':n(b)}</td></tr>`).join('');
+  LIVE=op;
+  document.getElementById('qgrant').innerHTML=op.map(o=>`<option value="${E(o.grant.id)}">${E(o.grant.id)} · ${E(o.grant.title)}</option>`).join('');
   document.getElementById('at').textContent='Read from testnet at '+new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
  }catch(e){document.getElementById('err').textContent='Could not read the chain: '+e.message}
 }
@@ -111,21 +121,54 @@ link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKE
 document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>';
 
 const ONECLICK='https://1click.chaindefuser.com/v0/quote';
-const DEST={base:['nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN'],arb:['nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN'],sol:['nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near','So11111111111111111111111111111111111111112','DESTINATION_CHAIN'],near:['nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1','near','DESTINATION_CHAIN']};
-function yocto(v){const [w,f='']=String(v).trim().split('.');if(!/^\d+$/.test(w)||!/^\d*$/.test(f))throw new Error('Enter a plain number of NEAR');return (BigInt(w)*10n**24n+BigInt((f+'0'.repeat(24)).slice(0,24))).toString()}
+const ROUTES=[
+ ['AURORA on NEAR','nep141:aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near','placeholder.near','DESTINATION_CHAIN'],
+ ['AURORA on Ethereum','nep141:eth-0xaaaaaa20d9e0e2461697782ef11675f668207961.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN'],
+ ['USDC on Base','nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near','0x1111111111111111111111111111111111111111','DESTINATION_CHAIN']
+];
+const BOOK=[
+ {token:'CLIFF',title:'Hire still inside the cliff',total:500000,elapsed:0,cliff:90,duration:730,cancel:false},
+ {token:'CLIFF',title:'Engineer grant, already vesting',total:240000,elapsed:180,cliff:30,duration:365,cancel:false},
+ {token:'CLIFF',title:'Finished grant, fully vested',total:80000,elapsed:400,cliff:0,duration:365,cancel:false},
+ {token:'CLIFF',title:'Advisor, issuer can cancel',total:120000,elapsed:10,cliff:30,duration:180,cancel:true},
+ {token:'AURORA',title:'Ecosystem grant, demo units',total:1000000,elapsed:40,cliff:0,duration:365,cancel:false}
+];
+function schedule(b){const elapsed=Math.min(b.elapsed,b.duration);const vested=elapsed<b.cliff?0:Math.floor(b.total*elapsed/b.duration);return {vested,claimable:vested,locked:b.total-vested};}
+document.getElementById('book').innerHTML='<tr><th>Token</th><th>Grant</th><th>Total</th><th>Vested</th><th>Still locked</th><th>Borrow up to</th></tr>'+BOOK.map(b=>{const s=schedule(b);const borrow=b.cancel||s.locked===0?0:Math.floor(s.locked*0.4);return `<tr><td>${b.token}</td><td class="l">${E(b.title)}${b.cancel?' <span class="cap">cancellable</span>':''}</td><td>${n(b.total)}</td><td>${n(s.vested)}</td><td>${n(s.locked)}</td><td>${borrow?n(borrow):'not offered'}</td></tr>`}).join('');
+let LIVE=[];
+function yocto(v){const [w,f='']=String(v).trim().split('.');if(!/^\d+$/.test(w)||!/^\d*$/.test(f))throw new Error('Enter a plain number of NEAR');const y=(BigInt(w)*10n**24n+BigInt((f+'0'.repeat(24)).slice(0,24)));if(y<=0n)throw new Error('The NEAR amount is zero');return y.toString()}
+function choiceNear(o,px){
+ const unvested=Number(o.grant.unvested||0), claimable=Number(o.grant.claimable||0), max=Number(o.borrow.max_advance||0);
+ const kind=document.getElementById('qchoice').value;
+ if(kind==='borrow'){if(!(max>0))throw new Error(o.borrow.why_not||'This grant cannot be borrowed against');return {tokens:max,near:max*px,note:'Borrow the on-chain maximum, '+n(max)+' CLIFF.'}}
+ if(kind==='sell'){if(!o.can_sell)throw new Error(o.grant.cancellable?'A cancellable grant cannot be sold':'Nothing locked can be sold');const slice=Math.floor(unvested*0.25);const cash=slice*0.6;return {tokens:cash,near:cash*px,note:'Sell '+n(slice)+' CLIFF. At a 40% discount the holder receives '+n(cash)+' CLIFF of value.'}}
+ if(!(claimable>0))throw new Error('Nothing has vested yet on this grant');
+ return {tokens:claimable,near:claimable*px,note:'Cash the '+n(claimable)+' CLIFF that have already vested.'}
+}
+async function oneQuote(route,amount){
+ const [label,asset,to,rt]=route;
+ const body={dry:true,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:'nep141:wrap.near',depositType:'ORIGIN_CHAIN',destinationAsset:asset,amount,refundTo:'placeholder.near',refundType:'ORIGIN_CHAIN',recipient:to,recipientType:rt,deadline:new Date(Date.now()+30*6e4).toISOString()};
+ const r=await fetch(ONECLICK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const j=await r.json();
+ if(!j.quote)throw new Error(j.message||('HTTP '+r.status));
+ return {label,q:j.quote};
+}
 async function quote(){
- const t=document.getElementById('qt');t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
+ const t=document.getElementById('qt'), meta=document.getElementById('qmeta');
+ t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
  try{
-  const [asset,to,rt]=DEST[document.getElementById('qd').value];
-  const body={dry:true,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:'nep141:wrap.near',depositType:'ORIGIN_CHAIN',destinationAsset:asset,amount:yocto(document.getElementById('qa').value),refundTo:'near',refundType:'ORIGIN_CHAIN',recipient:to,recipientType:rt,deadline:new Date(Date.now()+30*6e4).toISOString()};
-  const r=await fetch(ONECLICK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();
-  if(!j.quote)throw new Error(j.message||('HTTP '+r.status));
-  const q=j.quote,fee=(j.quoteRequest.appFees||[]).reduce((a,f)=>a+f.fee,0);
-  t.innerHTML='<tr><th>Quote</th><th>Value</th></tr>'+[['You send',q.amountInFormatted+' NEAR ($'+Number(q.amountInUsd).toFixed(2)+')'],['You receive',q.amountOutFormatted+' USDC'],['At least, after 1% slippage',(Number(q.minAmountOut)/1e6).toFixed(6)+' USDC'],['Fee without a 1Click partner key',(fee/100).toFixed(2)+'%'],['Estimated time',q.timeEstimate+' seconds'],['Quoted at',j.timestamp],['Signed by 1Click',String(j.signature).slice(0,24)+'…']].map(([a,b])=>`<tr><td>${E(a)}</td><td>${E(b)}</td></tr>`).join('');
- }catch(e){t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
+  const o=LIVE.find(x=>x.grant.id===document.getElementById('qgrant').value);
+  if(!o)throw new Error('Load a holder with grants first');
+  const px=Number(document.getElementById('qpx').value);
+  if(!(px>0))throw new Error('Enter a NEAR price per CLIFF above zero');
+  const c=choiceNear(o,px);
+  meta.textContent=c.note+' At your price that is '+c.near.toFixed(4)+' NEAR. Dry quotes only.';
+  const amount=yocto(c.near.toFixed(8));
+  const rows=await Promise.all(ROUTES.map(route=>oneQuote(route,amount).catch(e=>({label:route[0],error:e.message}))));
+  t.innerHTML='<tr><th>Route</th><th>You would send</th><th>You would receive</th><th>Quoted value</th></tr>'+rows.map(row=>row.error?`<tr><td>${E(row.label)}</td><td colspan="3" class="bad">${E(row.error)}</td></tr>`:`<tr><td>${E(row.label)}</td><td>${E(row.q.amountInFormatted)} NEAR</td><td>${E(row.q.amountOutFormatted)}</td><td>$${Number(row.q.amountOutUsd).toFixed(2)}</td></tr>`).join('');
+ }catch(e){meta.textContent='';t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
 }
 document.getElementById('qg').onclick=quote;
-if(new URLSearchParams(location.search).get('quote'))quote();
 const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
 document.getElementById('go').onclick=()=>load(inp.value.trim());
 load(inp.value.trim());
