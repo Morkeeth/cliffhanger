@@ -147,6 +147,7 @@ async function walletSignUrl(tx, callback, wallet){
  const fulls=(keys.result.keys||[]).filter(k=>k.access_key&&k.access_key.permission==='FullAccess');
  if(!fulls.length) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
  const chosen=(typeof localStorage!=='undefined'&&localStorage.getItem('cliffhanger.mainnetKey.'+tx.signerId))||'';
+ if(chosen&&!fulls.some(k=>k.public_key===chosen)) throw new Error('The key saved for '+tx.signerId+' is no longer a full-access key. Clear localStorage cliffhanger.mainnetKey.'+tx.signerId+' and try again.');
  const full=fulls.find(k=>k.public_key===chosen)||fulls[0];
  if(fulls.length>1&&!chosen&&typeof confirm==='function'&&!confirm(tx.signerId+' has '+fulls.length+' full-access keys. MyNearWallet must hold '+full.public_key+'. Continue with this key?')) throw new Error('Stopped: pick the key your MyNearWallet holds (localStorage cliffhanger.mainnetKey.'+tx.signerId+')');
  // Read the nonce of exactly this key; parse it from raw text so values above 2^53 keep every digit.

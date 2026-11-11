@@ -25,3 +25,17 @@ console.log(/Sign the deposit/.test(el('qsettle').innerHTML)?'HAPPY PATH OK':'HA
 // amount mismatch refused
 const p3=settle('AURORA on NEAR'); release({json:async()=>({quote:{depositAddress:'dep.near',amountIn:'6'}})}); await p3;
 console.log(/different amount/.test(el('qsettle').innerHTML)?'AMOUNT CHECK OK':'AMOUNT FAIL');
+
+// Re-review cases: a stale quote must not render, and a stale sign must not redirect.
+{
+  const q=src.match(/async function quote\(\)\{[\s\S]*?\n\}\n/)[0];
+  let resolveA; let calls=0; const tbl=el('qt');
+  const ctx={BOOK:[], LIVE:[{grant:{id:'g'}}], liveSpec:()=>({}), bookSpec:()=>({}), oneQuote:()=>{calls++; return calls===1?new Promise(r=>resolveA=r):Promise.resolve({q:{amountInFormatted:'999',amountOutFormatted:'1',amountOutUsd:1}})}};
+  Object.assign(globalThis, ctx);
+  let n=0; globalThis.sizeChoice=()=>({tokens:1,note:''}); globalThis.routesFor=()=>{n++; return {origin:n===1?'A':'B',amount:String(n),unit:n===1?'CLIFF':'AURORA',routes:[['USDC on Base','x']],note:''}};
+  el('qgrant').value='live:g'; el('qchoice').value='sell';
+  const quoteFn=eval('('+q.replace('async function quote','async function')+')');
+  const pa=quoteFn(); const pb=quoteFn(); await pb;
+  const after=tbl.innerHTML; resolveA({q:{amountInFormatted:'100',amountOutFormatted:'1',amountOutUsd:1}}); await pa;
+  console.log(tbl.innerHTML===after && LAST && LAST.origin==='B' ? 'STALE QUOTE DISCARDED' : 'STALE QUOTE RENDERED');
+}

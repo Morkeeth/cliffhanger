@@ -263,6 +263,7 @@ async function walletSignUrl(tx, callback, wallet){
  const fulls=(keys.result.keys||[]).filter(k=>k.access_key&&k.access_key.permission==='FullAccess');
  if(!fulls.length) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
  const chosen=(typeof localStorage!=='undefined'&&localStorage.getItem('cliffhanger.mainnetKey.'+tx.signerId))||'';
+ if(chosen&&!fulls.some(k=>k.public_key===chosen)) throw new Error('The key saved for '+tx.signerId+' is no longer a full-access key. Clear localStorage cliffhanger.mainnetKey.'+tx.signerId+' and try again.');
  const full=fulls.find(k=>k.public_key===chosen)||fulls[0];
  if(fulls.length>1&&!chosen&&typeof confirm==='function'&&!confirm(tx.signerId+' has '+fulls.length+' full-access keys. MyNearWallet must hold '+full.public_key+'. Continue with this key?')) throw new Error('Stopped: pick the key your MyNearWallet holds (localStorage cliffhanger.mainnetKey.'+tx.signerId+')');
  // Read the nonce of exactly this key; parse it from raw text so values above 2^53 keep every digit.
@@ -317,7 +318,9 @@ async function settle(label){
   document.getElementById('qsign').onclick=async()=>{
    const btn=document.getElementById('qsign'), out=document.getElementById('qstatout');
    btn.disabled=true; out.textContent='Reading the account key…';
-   try{ const url=await walletSignUrl(tx, back, WALLET); localStorage.setItem('cliffhanger.pendingDeposit', q.depositAddress); location.assign(url); }
+   try{ const url=await walletSignUrl(tx, back, WALLET);
+    if(ticket!==SETTLE_SEQ||LAST!==plan) throw new Error('The quote changed while the wallet request was prepared. Nothing was sent.');
+    localStorage.setItem('cliffhanger.pendingDeposit', q.depositAddress); location.assign(url); }
    catch(err){ btn.disabled=false; out.textContent=err.message; }
   };
  }catch(e){box.innerHTML='<p class="bad">'+E(e.message)+'</p>'}
@@ -327,6 +330,7 @@ async function quote(){
  t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
  document.getElementById('qsettle').textContent='';
  LAST=null; SETTLE_SEQ++;
+ let mine=null;
  try{
   const sel=document.getElementById('qgrant').value;
   let spec;
@@ -334,11 +338,13 @@ async function quote(){
   else {const o=LIVE.find(x=>x.grant.id===sel.replace(/^live:/,'')); if(!o) throw new Error('Load a holder with grants first'); spec=liveSpec(o)}
   const sized=sizeChoice(spec, document.getElementById('qchoice').value, Number(document.getElementById('qpx').value), document.getElementById('qdisc').value);
   const route=routesFor(spec.token, sized.tokens, Number(document.getElementById('qpx').value));
-  LAST={origin:route.origin, amount:route.amount, unit:route.unit, routes:route.routes};
+  mine={origin:route.origin, amount:route.amount, unit:route.unit, routes:route.routes};
+  LAST=mine;
   meta.textContent=sized.note+route.note+' Pick a route to prepare a deposit. Nothing is sent by the quote.';
   const rows=await Promise.all(route.routes.map(r=>oneQuote(route.origin, r, route.amount).catch(e=>({label:r[0],error:e.message}))));
+  if(LAST!==mine) return; // a newer quote owns the table and the buttons
   t.innerHTML='<tr><th>Route</th><th>You would send</th><th>You would receive</th><th>Quoted value</th><th></th></tr>'+rows.map(row=>row.error?`<tr><td>${E(row.label)}</td><td colspan="4" class="bad">${E(row.error)}</td></tr>`:`<tr><td>${E(row.label)}</td><td>${E(row.q.amountInFormatted)} ${route.unit}</td><td>${E(row.q.amountOutFormatted)}</td><td>$${Number(row.q.amountOutUsd).toFixed(2)}</td><td><button type="button" onclick="settle('${E(row.label)}')">Prepare deposit</button></td></tr>`).join('');
- }catch(e){LAST=null;meta.textContent='';t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
+ }catch(e){if(mine&&LAST!==mine) return; LAST=null;meta.textContent='';t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
 }
 document.getElementById('qg').onclick=quote;
 const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
