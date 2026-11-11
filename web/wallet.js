@@ -92,7 +92,8 @@ async function init() {
     };
     const params = new URLSearchParams(location.search);
     if (params.has('errorCode')) say('Wallet declined or failed: ' + (params.get('errorMessage') || params.get('errorCode')));
-    const hashes = params.get('transactionHashes');
+    // A return carrying ?deposit= is the mainnet Intents deposit; the page script owns it, not this testnet controller.
+    const hashes = params.has('deposit') ? null : params.get('transactionHashes');
     if (hashes && account) {
       const hash = hashes.split(',')[0]; showTx(hash);
       say('Wallet returned a transaction. Checking final receipts…');

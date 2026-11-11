@@ -1,5 +1,5 @@
 """Dry NEAR Intents plans for a real choice, including vested AURORA. No network."""
-import os, sys, unittest
+import json, os, subprocess, sys, unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import intents
 import loan
@@ -98,7 +98,63 @@ class IntentPlans(unittest.TestCase):
         self.assertEqual(got['discount'], 0.55)
         self.assertEqual(got['tokens'], 112)  # 250 slice, 45% of it kept
 
-    def test_pages_quote_the_term_and_the_aurora_token(self):
+    def test_settlement_is_one_non_dry_route_and_a_wallet_transaction(self):
+        sized = plan('g5', 'sell')
+        self.assertTrue(all(req['body']['dry'] is True for req in sized['requests']))
+        settled = intents.settle_request(sized, 'USDC on Base', 'holder.near', '0xabcDEFabcdefABCDEFabcdefABCDEFabcdefABCD')
+        self.assertFalse(settled['body']['dry'])
+        self.assertEqual(settled['body']['refundTo'], 'holder.near')
+        self.assertEqual(settled['body']['recipient'], '0xabcDEFabcdefABCDEFabcdefABCDEFabcdefABCD')
+        self.assertEqual(settled['body']['originAsset'], intents.WRAP_NEAR)
+        self.assertEqual(settled['kind'], 'near')
+        near = intents.settle_request(sized, 'AURORA on NEAR', 'Holder.Near', '')
+        self.assertEqual(near['body']['recipient'], 'holder.near')
+        tx = intents.deposit_transaction('near', 'holder.near', 'ab' * 32, settled['amount'])
+        self.assertEqual([a['params']['methodName'] for a in tx['actions']],
+                         ['storage_deposit', 'near_deposit', 'ft_transfer'])
+        self.assertEqual(tx['receiverId'], 'wrap.near')
+        self.assertEqual(tx['actions'][1]['params']['deposit'], settled['amount'])
+        self.assertEqual(tx['actions'][2]['params']['args']['amount'], settled['amount'])
+        self.assertEqual(tx['actions'][2]['params']['deposit'], '1')
+        aurora = plan('aur3', 'claim')
+        sold = intents.settle_request(aurora, 'wNEAR', 'holder.near', '')
+        self.assertEqual(sold['kind'], 'aurora')
+        self.assertFalse(sold['body']['dry'])
+        atx = intents.deposit_transaction('aurora', 'holder.near', 'cd' * 32, sold['amount'])
+        self.assertEqual([a['params']['methodName'] for a in atx['actions']],
+                         ['storage_deposit', 'ft_transfer'])
+        self.assertEqual(atx['receiverId'], intents.AURORA_CONTRACT)
+        self.assertNotIn('near_deposit', [a['params']['methodName'] for a in atx['actions']])
+        with self.assertRaises(ValueError):
+            intents.settle_request(sized, 'USDC on Base', 'holder.near', intents.PLACEHOLDER_EVM)
+        with self.assertRaises(ValueError):
+            intents.settle_request(sized, 'USDC on Base', 'not an account', '0xabcDEFabcdefABCDEFabcdefABCDEFabcdefABCD')
+        with self.assertRaises(ValueError):
+            intents.deposit_transaction('near', 'holder.near', 'ab' * 32, '0')
+        # Bytes MyNearWallet's /sign page accepts, checked against @near-js/transactions.
+        fixture = intents.deposit_transaction('near', 'holder.near', 'ab' * 32, '1000000000000000000000000')
+        near_bytes = intents.transaction_base64(fixture, 'ed25519:' + '1' * 32, 7, '1' * 32)
+        self.assertEqual(near_bytes, (
+            'CwAAAGhvbGRlci5uZWFyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAJAAAAd3JhcC5uZWFy'
+            'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAg8AAABzdG9yYWdlX2RlcG9zaXRRAAAAeyJhY2NvdW50X2lkIjoi'
+            'YWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiJ9AOBX60gbAAAA'
+            'AEhWNxk8w0MAAAAAAAAAAgwAAABuZWFyX2RlcG9zaXQCAAAAe30A4FfrSBsAAAAAAKHtzM4bwtMAAAAAAAACCwAAAGZ0X3RyYW5z'
+            'ZmVyjAAAAHsicmVjZWl2ZXJfaWQiOiJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFi'
+            'YWJhYmFiYWJhYmFiIiwiYW1vdW50IjoiMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsIm1lbW8iOiJjbGlmZmhhbmdlciJ9AOBX'
+            '60gbAAABAAAAAAAAAAAAAAAAAAAA'))
+        aurora_tx = intents.deposit_transaction('aurora', 'alice.near', 'cd' * 32, '42')
+        aurora_bytes = intents.transaction_base64(
+            aurora_tx, 'ed25519:2K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j', 99,
+            '9K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j')
+        self.assertEqual(aurora_bytes, (
+            'CgAAAGFsaWNlLm5lYXIAE37FmMVK3Bilnke5M9mBJFVS/k44Hmwn3ek6hAj0dh5jAAAAAAAAADwAAABhYWFhYWEyMGQ5ZTBlMjQ2'
+            'MTY5Nzc4MmVmMTE2NzVmNjY4MjA3OTYxLmZhY3RvcnkuYnJpZGdlLm5lYXJ7gJSRm9JdxIA/2HCVsps2by5TjvGiz7iNu1KECPR2'
+            'HgIAAAACDwAAAHN0b3JhZ2VfZGVwb3NpdFEAAAB7ImFjY291bnRfaWQiOiJjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2Rj'
+            'ZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkIn0A4FfrSBsAAAAASFY3GTzDQwAAAAAAAAACCwAAAGZ0X3RyYW5zZmVy'
+            'dQAAAHsicmVjZWl2ZXJfaWQiOiJjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2RjZGNkY2Rj'
+            'ZGNkY2RjZGNkIiwiYW1vdW50IjoiNDIiLCJtZW1vIjoiY2xpZmZoYW5nZXIifQDgV+tIGwAAAQAAAAAAAAAAAAAAAAAAAA=='))
+
+    def test_pages_quote_the_term_and_can_prepare_a_deposit(self):
         for name in ('web/index.html', 'docs/index.html'):
             with open(os.path.join(ROOT, name), encoding='utf-8') as handle:
                 text = handle.read()
@@ -106,11 +162,43 @@ class IntentPlans(unittest.TestCase):
             self.assertIn('aur3', text)
             self.assertIn(intents.AURORA_NEAR, text)
             self.assertIn('10n**18n', text)
+            self.assertIn('dry:false', text)
+            self.assertIn('near_deposit', text)
+            self.assertIn('ft_transfer', text)
+            self.assertIn('/v0/status', text)
+            self.assertIn('view_access_key_list', text)
+            self.assertIn('function borshTx', text)
             self.assertNotIn('every slice quote uses that short-term band', text)
         with open(os.path.join(ROOT, 'poc', 'index.html'), encoding='utf-8') as handle:
             demo = handle.read()
         self.assertIn('/api/intent-plan', demo)
+        self.assertIn('/api/intent-settle', demo)
+        self.assertIn('near_deposit', demo)
+        self.assertIn('ft_transfer', demo)
+        self.assertIn('view_access_key_list', demo)
+        self.assertIn('function borshTx', demo)
         self.assertNotIn('Sell a slice at 40% off', demo)
+        blocks = []
+        for name in ('web/index.html', 'docs/index.html', 'poc/index.html'):
+            with open(os.path.join(ROOT, name), encoding='utf-8') as handle:
+                text = handle.read()
+            start = text.index('/* borsh-tx */')
+            end = text.index('/* /borsh-tx */')
+            blocks.append(text[start:end])
+        self.assertEqual(len(set(blocks)), 1)
+        tx = intents.deposit_transaction('near', 'holder.near', 'ab' * 32, '1000000000000000000000000')
+        script = blocks[0] + '\nconsole.log(borshTx(%s, %s, 7, %s));\n' % (
+            json.dumps(tx), json.dumps('ed25519:' + '1' * 32), json.dumps('1' * 32))
+        got = subprocess.run(['node', '--input-type=module', '-e', script], check=True, capture_output=True, text=True)
+        self.assertEqual(got.stdout.strip(), intents.transaction_base64(tx, 'ed25519:' + '1' * 32, 7, '1' * 32))
+        aurora_tx = intents.deposit_transaction('aurora', 'alice.near', 'cd' * 32, '42')
+        script = blocks[0] + '\nconsole.log(borshTx(%s, %s, 99, %s));\n' % (
+            json.dumps(aurora_tx), json.dumps('ed25519:2K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j'),
+            json.dumps('9K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j'))
+        got = subprocess.run(['node', '--input-type=module', '-e', script], check=True, capture_output=True, text=True)
+        self.assertEqual(got.stdout.strip(), intents.transaction_base64(
+            aurora_tx, 'ed25519:2K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j', 99,
+            '9K6s7H7yQ7d8s2oA4m1pZ9cV3bN5xL8tR6uW1qY4eH7j'))
 
 
 

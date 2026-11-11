@@ -1,15 +1,30 @@
-"""Size one Cliffhanger choice and the dry NEAR Intents requests that quote it.
+"""Size one Cliffhanger choice and the NEAR Intents requests that quote or settle it.
 
-Every request is dry. Nothing in this module sends a swap or talks to the network.
+plan_position builds dry quotes. settle_request builds one non-dry quote body, and
+deposit_transaction builds the wallet transaction that would fund the deposit address
+1Click returns. transaction_base64 turns that into the unsigned bytes MyNearWallet
+signs. None of these functions calls the network or signs anything.
 Aurora's own chain is not in the live 1Click token list. The AURORA token is, on NEAR
 and on Ethereum, and that is the Aurora route these requests use.
 """
+import base64
+import json
 import math
+import re
 from decimal import Decimal, ROUND_DOWN
 
 from planner import offx_discount
 
 ONECLICK = 'https://1click.chaindefuser.com/v0/quote'
+STATUS = 'https://1click.chaindefuser.com/v0/status'
+WALLET_SIGN = 'https://app.mynearwallet.com/sign'
+WRAP_CONTRACT = 'wrap.near'
+AURORA_CONTRACT = 'aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near'
+STORAGE_YOCTO = '1250000000000000000000'  # 0.00125 NEAR, the usual NEP-145 registration deposit
+GAS = '30000000000000'
+_B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+_NAMED = re.compile(r'^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$')
+_EVM = re.compile(r'^0x[0-9a-fA-F]{40}$')
 WRAP_NEAR = 'nep141:wrap.near'
 AURORA_NEAR = 'nep141:aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near'
 AURORA_ETH = 'nep141:eth-0xaaaaaa20d9e0e2461697782ef11675f668207961.omft.near'
@@ -182,6 +197,140 @@ def plan_position(pos, choice, price=None, amount=None, slice_tokens=None, enter
         'note': note,
         'requests': requests,
     }
+
+
+def near_account(value):
+    account = str(value or '').strip().lower()
+    if not 2 <= len(account) <= 64:
+        raise ValueError('Enter a mainnet NEAR account')
+    if re.fullmatch(r'[0-9a-f]{64}', account) or _NAMED.fullmatch(account):
+        return account
+    raise ValueError('Enter a mainnet NEAR account')
+
+
+def evm_address(value):
+    address = str(value or '').strip()
+    if not _EVM.fullmatch(address):
+        raise ValueError('Enter the 0x address that should receive the asset')
+    if address.lower() == PLACEHOLDER_EVM:
+        raise ValueError('Enter the 0x address that should receive the asset')
+    return address
+
+
+def _near_destination(asset):
+    return asset in (WRAP_NEAR, AURORA_NEAR)
+
+
+def settle_request(plan, route_label, refund_account, recipient=''):
+    """One non-dry quote for a route the dry plan already sized.
+
+    1Click answers with a deposit address. Funds move only if the holder then signs
+    the transfer this module describes. This function does not call 1Click.
+    """
+    refund = near_account(refund_account)
+    match = next((row for row in plan['requests'] if row['label'] == route_label), None)
+    if match is None:
+        raise ValueError('Unknown route')
+    dest = match['body']['destinationAsset']
+    if _near_destination(dest):
+        who = near_account(recipient) if str(recipient).strip() else refund
+    else:
+        who = evm_address(recipient)
+    body = dict(match['body'])
+    body['dry'] = False
+    body['refundTo'] = refund
+    body['recipient'] = who
+    body.pop('deadline', None)
+    if body['dry'] is not False:
+        raise RuntimeError('Settlement request stayed dry')
+    return {
+        'dry': False,
+        'endpoint': ONECLICK,
+        'statusEndpoint': STATUS,
+        'wallet': WALLET_SIGN,
+        'body': body,
+        'kind': 'near' if plan['origin'] == WRAP_NEAR else 'aurora',
+        'amount': plan['amount'],
+        'route': route_label,
+    }
+
+
+def deposit_transaction(kind, signer_id, deposit_account, amount):
+    """The mainnet transaction a wallet would sign to fund one 1Click deposit.
+
+    NEAR choices wrap exactly the quoted amount, then transfer that wNEAR.
+    AURORA choices transfer the AURORA the holder already holds. The page does not sign this.
+    """
+    signer = near_account(signer_id)
+    deposit = near_account(deposit_account)
+    if not str(amount).isdigit() or int(amount) <= 0:
+        raise ValueError('Deposit amount must be a positive integer')
+    amount = str(amount)
+    storage = {'type': 'FunctionCall', 'params': {
+        'methodName': 'storage_deposit', 'args': {'account_id': deposit},
+        'gas': GAS, 'deposit': STORAGE_YOCTO}}
+    transfer = {'type': 'FunctionCall', 'params': {
+        'methodName': 'ft_transfer',
+        'args': {'receiver_id': deposit, 'amount': amount, 'memo': 'cliffhanger'},
+        'gas': GAS, 'deposit': '1'}}
+    if kind == 'near':
+        wrap = {'type': 'FunctionCall', 'params': {
+            'methodName': 'near_deposit', 'args': {}, 'gas': GAS, 'deposit': amount}}
+        actions, receiver = [storage, wrap, transfer], WRAP_CONTRACT
+    elif kind == 'aurora':
+        actions, receiver = [storage, transfer], AURORA_CONTRACT
+    else:
+        raise ValueError('Unknown deposit kind')
+    return {'signerId': signer, 'receiverId': receiver, 'actions': actions}
+
+
+def _b58decode(value):
+    num = 0
+    for ch in value:
+        idx = _B58.find(ch)
+        if idx < 0:
+            raise ValueError('Bad base58')
+        num = num * 58 + idx
+    pad = len(value) - len(value.lstrip('1'))
+    raw = num.to_bytes((num.bit_length() + 7) // 8, 'big') if num else b''
+    return b'\x00' * pad + raw
+
+
+def _u32(n):
+    return int(n).to_bytes(4, 'little')
+
+
+def _u64(n):
+    return int(n).to_bytes(8, 'little')
+
+
+def _u128(n):
+    return int(n).to_bytes(16, 'little')
+
+
+def _bstr(text):
+    raw = str(text).encode()
+    return _u32(len(raw)) + raw
+
+
+def _action_bytes(action):
+    params = action['params']
+    args = json.dumps(params['args'], separators=(',', ':')).encode()
+    return b'\x02' + _bstr(params['methodName']) + _u32(len(args)) + args + _u64(params['gas']) + _u128(params['deposit'])
+
+
+def transaction_base64(tx, public_key, nonce, block_hash):
+    """Base64 borsh of one unsigned transaction, which is what MyNearWallet /sign accepts.
+
+    The holder signs it in the wallet. This function does not sign it and does not broadcast it.
+    """
+    key = _b58decode(str(public_key).split(':', 1)[-1])
+    block = _b58decode(str(block_hash))
+    if len(key) != 32 or len(block) != 32:
+        raise ValueError('Expected an ed25519 key and a block hash')
+    actions = b''.join(_action_bytes(action) for action in tx['actions'])
+    raw = _bstr(tx['signerId']) + b'\x00' + key + _u64(nonce) + _bstr(tx['receiverId']) + block + _u32(len(tx['actions'])) + actions
+    return base64.b64encode(raw).decode()
 
 
 def aurora_cards():

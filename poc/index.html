@@ -29,7 +29,7 @@ input{font:inherit;width:120px;padding:5px 8px;border:1px solid var(--line);bord
 <p class="sub">A second token. One grant is part way through vesting, one is half way, and one is fully vested. They are not in the CLIFF ledger, so nothing here moves alice's CLIFF balance. Quote sends the AURORA token through NEAR Intents.</p>
 <div class="row" id="aurora"></div>
 <h2 style="margin-top:8px">NEAR per CLIFF for a quote, you entered it</h2>
-<p class="sub">CLIFF has no market. This price is only for the dry quote, and it is separate from the treasury desk's demo price of 2. AURORA quotes ignore it: Intents prices that token. <input id="qpx" value="0.0001" inputmode="decimal" aria-label="NEAR per CLIFF"></p>
+<p class="sub">CLIFF has no market. This price is only for the quote, and it is separate from the treasury desk's demo price of 2. AURORA quotes ignore it: Intents prices that token. A dry quote does not move funds. Prepare deposit asks for one mainnet deposit address. You send NEAR or AURORA from your own wallet. The CLIFF ledger is not what gets bridged, and stake rewards are not a swap. <input id="qpx" value="0.0001" inputmode="decimal" aria-label="NEAR per CLIFF"> <input id="qrefund" placeholder="your mainnet account" spellcheck="false" aria-label="Mainnet NEAR account"> <input id="qrecv" placeholder="receiver, if different" spellcheck="false" aria-label="Receiving account"></p>
 <div class="row" style="margin-top:16px">
  <div class="card"><h2>Pending transfers</h2><div id="tx" class="log"></div></div>
  <div class="card"><h2>What happened</h2><div id="ev" class="log"></div></div>
@@ -60,7 +60,7 @@ ${sellControl(g, ledger)}
 ${ledger && g.options.stake.available?`<div class="opts"><button class="ghost" onclick="act('stake',{grant:'${g.id}'})">Stake the escrow</button></div>`:''}
 ${ledger && g.options.stake.collect?`<div class="opts"><button onclick="act('collect',{grant:'${g.id}'})">Collect staking rewards</button></div>`:''}
 ${ledger?'':`<div class="why">Demo schedule. Not in the CLIFF ledger.</div>`}
-<div class="opts"><select id="qc-${g.id}" aria-label="Choice to quote"><option value="borrow" ${b.available?'selected':''}>Quote the borrow</option><option value="sell" ${!b.available&&g.options.sell.available?'selected':''}>Quote the slice</option><option value="claim" ${!b.available&&!g.options.sell.available?'selected':''}>Quote what has vested</option></select><button class="ghost" onclick="quoteGrant('${g.id}')">Dry quote</button></div>
+<div class="opts"><select id="qc-${g.id}" aria-label="Choice to quote"><option value="borrow" ${b.available?'selected':''}>Quote the borrow</option><option value="sell" ${!b.available&&g.options.sell.available?'selected':''}>Quote the slice</option><option value="claim" ${!b.available&&!g.options.sell.available?'selected':''}>Quote what has vested</option></select><select id="qr-${g.id}" aria-label="Intents route">${(g.token==='AURORA'?['wNEAR','AURORA on Ethereum','USDC on Base']:['AURORA on NEAR','AURORA on Ethereum','USDC on Base']).map(r=>`<option>${r}</option>`).join('')}</select><button class="ghost" onclick="quoteGrant('${g.id}')">Dry quote</button><button class="ghost" onclick="settleGrant('${g.id}')">Prepare deposit</button></div>
 <div class="why" id="qq-${g.id}"></div>
 </div>`}
 function sellControl(g, ledger){
@@ -93,6 +93,114 @@ async function quoteGrant(id){
  }));
  box.innerHTML='<b>'+plan.note+'</b><br>'+rows.join('<br>');
 }
+/* borsh-tx */
+function b58decode(text){
+ const A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+ let n=0n, pad=0;
+ for(const ch of text){
+  const i=A.indexOf(ch);
+  if(i<0) throw new Error('Bad base58');
+  n=n*58n+BigInt(i);
+  if(n===0n) pad++;
+ }
+ if(n===0n) return new Uint8Array(pad);
+ let hex=n.toString(16);
+ if(hex.length%2) hex='0'+hex;
+ const body=Uint8Array.from(hex.match(/../g),h=>parseInt(h,16));
+ const out=new Uint8Array(pad+body.length);
+ out.set(body,pad);
+ return out;
+}
+function concatBytes(parts){
+ const n=parts.reduce((s,p)=>s+p.length,0);
+ const out=new Uint8Array(n);
+ let o=0;
+ for(const p of parts){out.set(p,o);o+=p.length}
+ return out;
+}
+function u32(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,Number(n),true);return b}
+function u64(n){const b=new Uint8Array(8);new DataView(b.buffer).setBigUint64(0,BigInt(n),true);return b}
+function u128(n){let v=BigInt(n);const b=new Uint8Array(16);for(let i=0;i<16;i++){b[i]=Number(v&255n);v>>=8n}return b}
+function bstr(s){const t=new TextEncoder().encode(s);return concatBytes([u32(t.length),t])}
+function actionBytes(action){
+ const p=action.params;
+ const args=new TextEncoder().encode(JSON.stringify(p.args));
+ return concatBytes([Uint8Array.of(2),bstr(p.methodName),concatBytes([u32(args.length),args]),u64(p.gas),u128(p.deposit)]);
+}
+function borshTx(tx, publicKey, nonce, blockHash){
+ const key=b58decode(String(publicKey).replace(/^ed25519:/,''));
+ const hash=b58decode(String(blockHash));
+ if(key.length!==32||hash.length!==32) throw new Error('Expected an ed25519 key and a block hash');
+ const actions=tx.actions.map(actionBytes);
+ return btoa(Array.from(concatBytes([bstr(tx.signerId),Uint8Array.of(0),key,u64(nonce),bstr(tx.receiverId),hash,u32(actions.length),...actions]),b=>String.fromCharCode(b)).join(''));
+}
+/* /borsh-tx */
+async function rpcCall(method, params){
+ const r=await fetch('https://rpc.mainnet.near.org',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'cliffhanger',method,params})});
+ const raw=await r.text();
+ const j=JSON.parse(raw);
+ if(j.error) throw new Error(j.error.data||j.error.message||'NEAR RPC refused the request');
+ return {raw, result:j.result};
+}
+async function walletSignUrl(tx, callback, wallet){
+ const keys=await rpcCall('query',{request_type:'view_access_key_list',finality:'final',account_id:tx.signerId});
+ const fulls=(keys.result.keys||[]).filter(k=>k.access_key&&k.access_key.permission==='FullAccess');
+ if(!fulls.length) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
+ const chosen=(typeof localStorage!=='undefined'&&localStorage.getItem('cliffhanger.mainnetKey.'+tx.signerId))||'';
+ if(chosen&&!fulls.some(k=>k.public_key===chosen)) throw new Error('The key saved for '+tx.signerId+' is no longer a full-access key. Clear localStorage cliffhanger.mainnetKey.'+tx.signerId+' and try again.');
+ const full=fulls.find(k=>k.public_key===chosen)||fulls[0];
+ if(fulls.length>1&&!chosen&&typeof confirm==='function'&&!confirm(tx.signerId+' has '+fulls.length+' full-access keys. MyNearWallet must hold '+full.public_key+'. Continue with this key?')) throw new Error('Stopped: pick the key your MyNearWallet holds (localStorage cliffhanger.mainnetKey.'+tx.signerId+')');
+ // Read the nonce of exactly this key; parse it from raw text so values above 2^53 keep every digit.
+ const one=await rpcCall('query',{request_type:'view_access_key',finality:'final',account_id:tx.signerId,public_key:full.public_key});
+ const nonceMatch=one.raw.match(/"nonce":\s*(\d+)/);
+ if(!nonceMatch) throw new Error('Could not read the access-key nonce');
+ const block=await rpcCall('block',{finality:'final'});
+ const encoded=borshTx(tx, full.public_key, BigInt(nonceMatch[1])+1n, block.result.header.hash);
+ return wallet+'?transactions='+encodeURIComponent(encoded)+'&callbackUrl='+encodeURIComponent(callback);
+}
+function depositTx(kind, signer, depositAccount, amount){
+ const storage={type:'FunctionCall',params:{methodName:'storage_deposit',args:{account_id:depositAccount},gas:'30000000000000',deposit:'1250000000000000000000'}};
+ const transfer={type:'FunctionCall',params:{methodName:'ft_transfer',args:{receiver_id:depositAccount,amount:String(amount),memo:'cliffhanger'},gas:'30000000000000',deposit:'1'}};
+ if(kind==='near'){
+  const wrap={type:'FunctionCall',params:{methodName:'near_deposit',args:{},gas:'30000000000000',deposit:String(amount)}};
+  return {signerId:signer,receiverId:'wrap.near',actions:[storage,wrap,transfer]};
+ }
+ return {signerId:signer,receiverId:'aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near',actions:[storage,transfer]};
+}
+async function intentStatus(deposit, box){
+ const r=await fetch('https://1click.chaindefuser.com/v0/status?depositAddress='+encodeURIComponent(deposit));
+ const j=await r.json();
+ const done=j.swapDetails&&j.swapDetails.destinationChainTxHashes&&j.swapDetails.destinationChainTxHashes[0];
+ box.textContent=(j.status||'No status')+(done?' · '+done:'');
+}
+async function settleGrant(id){
+ const kind=document.getElementById('qc-'+id).value;
+ const q=new URLSearchParams({grant:id,choice:kind,route:document.getElementById('qr-'+id).value,price:document.getElementById('qpx').value,refund:document.getElementById('qrefund').value,recipient:document.getElementById('qrecv').value});
+ const sl=document.getElementById('sl-'+id), amt=document.getElementById('amt-'+id);
+ if(kind==='sell'&&sl) q.set('slice', sl.value);
+ if(kind==='borrow'&&amt) q.set('amount', amt.value);
+ const plan=await call('/api/intent-settle?'+q);
+ const box=document.getElementById('qq-'+id);
+ if(!plan) return;
+ box.textContent='Asking 1Click for a deposit address…';
+ try{
+  const body=Object.assign({deadline:new Date(Date.now()+30*6e4).toISOString()}, plan.body);
+  const r=await fetch(plan.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(!j.quote||!j.quote.depositAddress) throw new Error(j.message||('HTTP '+r.status));
+  const deposit=j.quote.depositAddress;
+  const tx=depositTx(plan.kind, plan.body.refundTo, deposit, j.quote.amountIn);
+  const back=location.origin+location.pathname+'?deposit='+encodeURIComponent(deposit);
+  box.innerHTML='<b>'+plan.route+'</b><br>Send '+j.quote.amountInFormatted+' to '+deposit+' before '+(j.quote.timeWhenInactive||j.quote.deadline)+'. Nothing has been sent.<br><button class="ghost" id="sg-'+id+'" type="button">Sign the deposit in MyNearWallet</button> · <button class="ghost" id="st-'+id+'" type="button">Check status</button><div id="so-'+id+'"></div>';
+  document.getElementById('st-'+id).onclick=()=>intentStatus(deposit, document.getElementById('so-'+id));
+  document.getElementById('sg-'+id).onclick=async()=>{
+   const btn=document.getElementById('sg-'+id), out=document.getElementById('so-'+id);
+   btn.disabled=true; out.textContent='Reading the account key…';
+   try{ location.assign(await walletSignUrl(tx, back, plan.wallet)); }
+   catch(err){ btn.disabled=false; out.textContent=err.message; }
+  };
+ }catch(e){box.textContent=e.message}
+}
 function render(v){if(!v)return;document.getElementById('label').textContent=v.label;document.getElementById('day').textContent=v.day;document.getElementById('wal').textContent=fmt(v.wallets.alice);
 document.getElementById('grants').innerHTML=v.grants.map(g=>grantCard(g,v,true)).join('');
 document.getElementById('aurora').innerHTML=(v.aurora||[]).map(g=>grantCard(g,{transfers:[]},false)).join('');
@@ -101,4 +209,11 @@ document.getElementById('tx').innerHTML=v.transfers.map(t=>`<div>${t.id} · ${t.
 document.getElementById('ev').innerHTML=v.events.slice().reverse().map(e=>`<div>day ${e.day} · ${e.text}</div>`).join('')||'<div>nothing yet</div>';
 document.getElementById('others').innerHTML=Object.entries(v.wallets).filter(([k])=>k!=='alice').map(([k,n])=>`<div>${k}: ${fmt(n)}</div>`).join('')}
 call('/api/state').then(render);
+const pendingDeposit=new URLSearchParams(location.search).get('deposit');
+if(pendingDeposit){
+ const box=document.createElement('p');
+ box.className='sub';
+ document.querySelector('main').appendChild(box);
+ intentStatus(pendingDeposit, box).catch(e=>{box.textContent=e.message});
+}
 </script></body></html>
