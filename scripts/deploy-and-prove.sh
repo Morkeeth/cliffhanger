@@ -10,8 +10,14 @@ TOKEN_WASM="${TOKEN_WASM:-$ROOT/token/target/wasm32-unknown-unknown/release/clif
 VEST_WASM="${VEST_WASM:-$ROOT/contract/target/wasm32-unknown-unknown/release/near_vesting_loan_skeleton.wasm}"
 near(){ npx -y near-cli-rs@0.31.1 "$@" </dev/null; }
 clean(){ sed 's/\x1b\[[0-9;]*m//g'; }
-call(){ # signer contract method json deposit
-  near contract call-function as-transaction "$2" "$3" json-args "$4" prepaid-gas '100.0 Tgas' attached-deposit "$5" sign-as "$1" network-config "$NET" sign-with-keychain send 2>&1 | clean | grep -E "Transaction ID|ExecutionError|panicked|^Error" | sort -u | head -3 || true; }
+call(){ # signer contract method json deposit. Retries only network failures (expired or no outcome), never a contract panic.
+  local out i
+  for i in 1 2 3; do
+    out=$(near contract call-function as-transaction "$2" "$3" json-args "$4" prepaid-gas '100.0 Tgas' attached-deposit "$5" sign-as "$1" network-config "$NET" sign-with-keychain send 2>&1 | clean || true)
+    if grep -qE "ExecutionError|panicked|Transaction ID" <<<"$out" && ! grep -q "expired" <<<"$out"; then break; fi
+    echo "  network retry $i for $3" >&2; sleep 5
+  done
+  grep -E "Transaction ID|ExecutionError|panicked" <<<"$out" | sort -u | head -3 || true; }
 must_fail(){ local out; out=$(call "$@"); if grep -qE "ExecutionError|panicked" <<<"$out"; then echo "  refused as expected: $3 -> $(grep -oE 'panicked: [^\")]*' <<<"$out" | head -1)"; else echo "  !! NOT REFUSED: $3"; echo "$out"; exit 1; fi; }
 view(){ near contract call-function as-read-only "$1" "$2" json-args "$3" network-config "$NET" now 2>&1 | clean | grep -A1 "return value" | tail -1 || true; }
 TODAY=$(( $(date +%s) / 86400 ))
@@ -55,7 +61,7 @@ call "$HOLD" "$VEST" borrow "{\"grant_id\":\"g1\",\"amount\":\"50000\",\"lender\
 fi
 if step 9; then
 echo "9. Holder unlocks g1: lender paid first"
-call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '0 NEAR'
+call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '1 yoctoNEAR'
 BAL=$(view "$VEST" demo_balance "{\"account_id\":\"$HOLD\"}" | tr -dc '0-9')
 echo "   holder balance inside = $BAL; lender inside = $(view "$VEST" demo_balance "{\"account_id\":\"$LEND\"}")"
 fi

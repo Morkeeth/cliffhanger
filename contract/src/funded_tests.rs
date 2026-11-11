@@ -161,3 +161,33 @@ fn an_offer_deposit_lets_holders_draw_only_that_amount() {
     assert_eq!(c.lendable("lena.test".parse().unwrap()).0, 40_000);
     assert_eq!(c.lendable("sam.test".parse().unwrap()).0, 0);
 }
+
+#[test]
+fn a_wallet_with_a_withdrawal_in_flight_keeps_its_slot_and_gets_restored() {
+    let s = funded_grant().deposit("victim.near", 5_000).unwrap();
+    let mut s = s.withdraw_reserve("victim.near", 5_000).unwrap();
+    let mut i = 0;
+    while s.wallets.len() < 64 {
+        s = s.deposit(&format!("full{i}.near"), 1).unwrap();
+        i += 1;
+    }
+    assert!(s.ensure_wallet("newcomer.near").is_err(), "the in-flight wallet must not be evicted");
+    let s = s.withdraw_restore(SELF, "victim.near", 5_000).unwrap();
+    assert_eq!(s.balance("victim.near").unwrap(), 5_000);
+    assert!(s.withdrawing.is_empty());
+}
+#[test]
+fn a_settled_withdrawal_frees_the_wallet() {
+    let s = funded_grant().deposit("w.near", 5_000).unwrap();
+    let s = s.withdraw_reserve("w.near", 5_000).unwrap();
+    assert!(s.withdraw_settled("mallory", "w.near", 5_000).is_err());
+    let s = s.withdraw_settled(SELF, "w.near", 5_000).unwrap();
+    assert!(s.withdrawing.is_empty());
+}
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn unlock_needs_a_wallet_confirmation() {
+    let mut c = funded_contract();
+    ctx("alice.test");
+    c.unlock("g1".into());
+}

@@ -188,6 +188,8 @@ pub struct Engine {
     pub supply: Amount,
     /// What each account has agreed to lend or pay for a slice. A holder can draw on nothing else.
     pub lendable: BTreeMap<String, Amount>,
+    /// Withdrawals whose token transfer has not resolved yet. Their wallets are never evicted.
+    pub withdrawing: BTreeMap<String, Amount>,
     next_transfer: u64,
     next_lien: u64,
 }
@@ -198,6 +200,7 @@ impl Engine {
         let lendable = wallets.clone();
         Ok(Self {
             lendable,
+            withdrawing: BTreeMap::new(),
             day,
             contract,
             wallets,
@@ -241,8 +244,10 @@ impl Engine {
     }
     /// Free one wallet slot held by an empty account that no grant, loan, sale or offer refers to.
     fn evict_idle_wallet(&mut self) {
+        let withdrawing = &self.withdrawing;
         let referenced = |a: &str, grants: &BTreeMap<String, Grant>, lendable: &BTreeMap<String, Amount>| {
             lendable.contains_key(a)
+                || withdrawing.contains_key(a)
                 || grants.values().any(|g| {
                     g.holder == a || g.issuer == a || g.counterparty().is_some_and(|(who, _, _)| who == a)
                 })
@@ -870,12 +875,32 @@ impl Engine {
         let mut s = self.clone();
         s.debit(account, amount)?;
         s.supply = s.supply.checked_sub(amount).ok_or("supply underflow")?;
+        let open = s.withdrawing.get(account).copied().unwrap_or(0);
+        s.withdrawing.insert(account.into(), add(open, amount)?);
+        s.checked()
+    }
+    fn close_withdrawal(&mut self, account: &str, amount: Amount) -> Result<()> {
+        let open = self.withdrawing.get(account).copied().unwrap_or(0);
+        let left = open.checked_sub(amount).ok_or("no such withdrawal in flight")?;
+        if left == 0 {
+            self.withdrawing.remove(account);
+        } else {
+            self.withdrawing.insert(account.into(), left);
+        }
+        Ok(())
+    }
+    /// The outgoing token transfer succeeded. Only the contract's own callback may do this.
+    pub fn withdraw_settled(&self, actor: &str, account: &str, amount: Amount) -> Result<Self> {
+        need(actor == self.contract, "callback must be contract itself")?;
+        let mut s = self.clone();
+        s.close_withdrawal(account, amount)?;
         s.checked()
     }
     /// The outgoing token transfer failed: put the balance back. Only the contract's own callback may do this.
     pub fn withdraw_restore(&self, actor: &str, account: &str, amount: Amount) -> Result<Self> {
         need(actor == self.contract, "callback must be contract itself")?;
         let mut s = self.ensure_wallet(account)?;
+        s.close_withdrawal(account, amount)?;
         s.credit(account, amount)?;
         s.supply = add(s.supply, amount)?;
         s.checked()

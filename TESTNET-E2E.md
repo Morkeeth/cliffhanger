@@ -53,32 +53,32 @@ An independent review found three ways to lose funds and one init race. All four
 
 ## What changed in the contract
 - **Consent.** A holder can borrow or sell a slice only from an account that offered. Lenders and buyers deposit with `{"action":"offer"}` or call `set_lendable`. Before, a holder could name any account and take its balance.
-- **Wallet confirmation.** `borrow`, `sell_slice`, `repay`, `cancel`, `withdraw`, `create_grant`, `unstake` and `set_lendable` need exactly 1 yoctoNEAR, so a leaked function-call key cannot move value.
-- **No permanent lock.** Settled transfers are pruned, so unlocks keep working after 128 of them. Before, the 129th unlock failed for everyone. An empty wallet that nothing refers to can give up its slot.
+- **Wallet confirmation.** `borrow`, `sell_slice`, `repay`, `cancel`, `unlock`, `withdraw`, `create_grant`, `unstake` and `set_lendable` need exactly 1 yoctoNEAR, so a leaked function-call key cannot move value.
+- **No permanent lock.** Settled transfers are pruned, so unlocks keep working after 128 of them. Before, the 129th unlock failed for everyone. An empty wallet that nothing refers to can give up its slot. A wallet with a withdrawal in flight is never evicted, so a failed transfer is always restored.
 - **Init race.** The token and the vesting contract can be initialized only by their own account, inside the deploy transaction.
 
 ## Accounts
 | Role | Account |
 |---|---|
-| Token CLIFF (fixed supply, no value) | `ch11-tok.testnet` |
-| Funded vesting contract | `ch11-vest.testnet` |
-| Issuer | `ch11-iss.testnet` |
-| Holder | `ch11-hold.testnet` |
-| Lender | `ch11-lend.testnet` |
+| Token CLIFF (fixed supply, no value) | `ch11b-tok.testnet` |
+| Funded vesting contract | `ch11b-vest.testnet` |
+| Issuer | `ch11b-iss.testnet` |
+| Holder | `ch11b-hold.testnet` |
+| Lender | `ch11b-lend.testnet` |
 
 ## Transactions
 | Step | Tx |
 |---|---|
-| Deploy and init token in one transaction | DcvrjuCc4hotzLu2fsDsNYpQQUxbKt4zEgswWVQHUnGT |
-| Deploy and init vesting in one transaction | 2gfXMpHCrPRsDcVhSfSwtBsj1JghKyKKTQStBwMciCFq |
-| Issuer funds grant g1, 365,000 CLIFF | EhCd4nHJdjFcCy6ibzoUoC7WSuLfNnn5Vf8Sz6Ea5Ph9 |
-| Lender deposits 200,000 CLIFF as an offer | 6hqrTRd97ttKUZJmcbqyg9LgoZEepEDe1Kc3Kn2nA5CE |
+| Deploy and init token in one transaction | 8L5qEFavzNTCKfF2cSR9adrxv18uTHR6h21RorJ9hjXd |
+| Deploy and init vesting in one transaction | B2U5y48gLTEyeW1rnCMnQgn49xPAkYry3iDo2jPEZSQp |
+| Issuer funds grant g1, 365,000 CLIFF | Cqqps3WwQGcraHxSuzkds1QGZgpgrbCqKTHRPuNrVYUz |
+| Lender deposits 200,000 CLIFF as an offer | E7NYNDoSTptN3PVZ1FkRGU2ZsKSug475UbbthvNRjaoD |
 | Refused: borrow without 1 yoctoNEAR | "Requires attached deposit of exactly 1 yoctoNEAR" |
 | Refused: sell a slice to the issuer, who never offered | "buyer has not offered this much" |
 | Refused: a second init | "The contract has already been initialized" |
-| Holder borrows 50,000 from the offer | 2oqecHgBujhWFC6x7K7XGzUqHSVzN7QS1sGmowwVgb6R |
-| Unlock: lender paid first (202,712 inside), holder 197,288 | oJbvw1FpPq8Yzkc3G6HfxkCdmsBQUf7mnZXajbwwH9L |
-| Holder withdraws 197,288 CLIFF to own wallet | tLsk34Rc35BfPZfwUtjEDKCH1tC6ASr8EDZN4fvD52n |
+| Holder borrows 50,000 from the offer | DDjkJo9E5o1Q1cYUouaJVjGzCUSm3NznoGv9DBnwnk6E |
+| Unlock: lender paid first (202,712 inside), holder 197,288 | GqStXfrFAz8yYrwcb9mM2kgP5t78H8AWYbFwanBVFfMY |
+| Holder withdraws 197,288 CLIFF to own wallet | CVCr2SRYaQUdYWSAtYP5DmnvCprnLd7mWvb9ChHoLxdn |
 | **Check:** `backing()` = 367,712 = `ft_balance_of(contract)` | view calls |
 
 ## Still true

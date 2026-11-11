@@ -9,7 +9,7 @@ test('signing is tied to the connected holder, testnet, and supported methods',(
   const tx=transaction(own,own,'withdraw',{amount:'42'});
   assert.equal(tx.receiverId,VEST); assert.equal(tx.signerId,own);
   assert.equal(tx.actions[0].params.deposit,'1', 'withdraw carries 1 yoctoNEAR so the wallet must confirm it');
-  assert.equal(transaction(own,own,'unlock',{grant_id:'g1'}).actions[0].params.deposit,'0');
+  assert.equal(transaction(own,own,'unlock',{grant_id:'g1'}).actions[0].params.deposit,'1');
   assert.ok(BigInt(tx.actions[0].params.gas)>=60000000000000n);
 });
 test('token amounts stay exact and reject zero, fractions, negatives and exponent notation',()=>{

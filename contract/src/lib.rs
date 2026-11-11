@@ -334,7 +334,9 @@ impl Contract {
         U128(0)
     }
     /// Funded mode: move unlocked tokens into Cliffhanger balances. The lender or buyer is paid first.
+    #[payable]
     pub fn unlock(&mut self, grant_id: String) {
+        near_sdk::assert_one_yocto();
         assert!(self.funded, "unlock needs the funded contract; the demo uses claim");
         self.engine = checked(
             self.current()
@@ -366,7 +368,12 @@ impl Contract {
     #[private]
     pub fn on_withdraw_resolved(&mut self, account: AccountId, amount: U128) -> bool {
         let ok = matches!(env::promise_result(0), PromiseResult::Successful(_));
-        if !ok {
+        if ok {
+            // Bookkeeping only; never let it undo a completed transfer.
+            if let Ok(next) = self.engine.withdraw_settled(env::current_account_id().as_str(), account.as_str(), amount.0) {
+                self.engine = next;
+            }
+        } else {
             self.engine = checked(self.engine.withdraw_restore(
                 env::current_account_id().as_str(),
                 account.as_str(),
