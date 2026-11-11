@@ -20,7 +20,7 @@ This page reads the funded contract from NEAR testnet. It does not connect a wal
 
 ## Local wallet journey (prepared 11 November; not published)
 
-Node 22 or later is required. From the repository root:
+Node 22 is required (`nvm use` reads `.nvmrc`). From the repository root:
 
 ```
 npm ci --ignore-scripts
@@ -116,7 +116,7 @@ You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 ## What is not built
 
 - **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The on-chain page asks the 1Click API for dry-run quotes sized to a real grant choice, including the AURORA token on NEAR and on Ethereum. Aurora's own chain is not in the live token list, so the page does not invent a route there. Nothing is sent. The vesting contract is not on mainnet: the escrow is unaudited, testnet is enough for this hackathon, and the only mainnet call is that dry quote.
-- **Wallet sign-in.** Actions are signed with the NEAR CLI today. Signing in with a wallet from the page is not built yet.
+- **Published wallet journey.** The release candidate adds testnet MyNearWallet connect, unlock and withdrawal. It has automated controller checks; a real browser wallet signature and final token receipt are still unproven. The existing GitHub Pages viewer stays read-only.
 - **A real staking pool.** The demo contract mints demo rewards. The funded contract refuses to stake, because those rewards would have no tokens behind them.
 
 ## Layout
@@ -126,7 +126,8 @@ You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 | `poc/` | Python engine, planner, local demo server and its tests |
 | `contract/` | near-sdk Rust contract, demo and funded modes |
 | `token/` | CLIFF, a NEP-141 testnet demo token with no value |
-| `web/` | One static page that reads the testnet contract and gets an Intents quote |
+| `web/` | Vite entry with testnet reads, MyNearWallet unlock/withdraw and Intents dry quotes |
+| `docs/` | Existing read-only GitHub Pages viewer; kept separate from the wallet build |
 | `TESTNET-E2E.md` | The real-token run on testnet, with every transaction ID |
 
 ## Disclosure
@@ -138,3 +139,13 @@ Claude Code and Codex wrote most of the code under human direction.
 ## License
 
 MIT. See LICENSE.
+
+## Hosting the release candidate
+
+Use the repository root, Node **22.x**, install command **npm ci**, build command **npm run build**, and output directory **dist**. `vercel.json` supplies the Vite build settings; `.nvmrc` and package engines pin the Node major. No environment variables, server, issuer keys, or wallet keys are needed. Build and preview locally with `npm run build` then `npm run preview` (http://127.0.0.1:8933).
+
+The deployable entry is `web/index.html`, bundled into `dist/index.html` with relative hashed assets. Deploy **dist**, not `docs` or the repository files. `docs/index.html` deliberately remains the separate read-only GitHub Pages entry. There are no client-side path routes, so no catch-all rewrite is required. Preserve query strings on `/`: MyNearWallet returns account selection and transaction results there. The installed connector derives its callback URL from the current page URL. Use one stable HTTPS origin for the full connect/sign/return test; localhost, preview URLs and production have separate browser storage. Do not change origins midway through a wallet flow or assume account selection carries between them.
+
+The browser calls NEAR testnet RPC, testnet MyNearWallet and the live 1Click dry-quote API directly. Google Fonts is an optional external visual dependency. A restrictive CSP must permit those connections and the bundled module. Hosted CORS, wallet return and final RPC receipts must be checked on the chosen origin; a successful static build does not prove them. No additional backend or key-bearing proxy is included.
+
+Vercel supports Vite and Node 22; see [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite) and [supported Node versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions). Hosting is prepared but this candidate has not been deployed.
