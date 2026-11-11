@@ -85,3 +85,29 @@ An independent review found three ways to lose funds and one init race. A second
 - The contract account's full-access key can redeploy the code, so whoever holds it can drain the contract. There is no owner method, pause or sweep. Tokens sent with a plain `ft_transfer` are stranded.
 - The grant limit is 32 and the wallet limit is 64. Only accounts holding CLIFF can fill them, and the demo keeps the whole supply with the issuer.
 - Stake and collect_rewards stay refused in funded mode.
+
+# Agent payday on testnet (12 Nov 2026)
+
+Oscar's ruling, 12 Nov: unlock runs without wallet confirmation so an agent can run vesting payday. Withdraw and every other money move keep the 1 yoctoNEAR confirmation. Reproduce with `AGENT_KEY_FILE=... scripts/deploy-and-prove.sh`. A Codex review found the contract change sound and asked for stricter proof; this run uses it (exact refusal texts, full CLI output kept).
+
+| Role | Account |
+|---|---|
+| Token CLIFF | `tok.ch11b-iss.testnet` |
+| Vesting contract (live site reads this) | `vest.ch11b-iss.testnet` |
+| Issuer / holder / lender | `iss.ch11b-hold.testnet` / `hold.ch11b-hold.testnet` / `lend.ch11b-hold.testnet` |
+
+| Step | Tx |
+|---|---|
+| Deploy and init token | 9GPCKUjRb2dFfs46eUEtG58mayQrwumZF3Cv8zFV7688 |
+| Deploy and init vesting | HFRHxJoPnub29xFNW3TCjbH57GS5G9WebRedmSPYeDFw |
+| Holder borrows 50,000 from the lender's offer | 4WGnArRnwKhVUGZKzwqMco79cwXy4qZHnqrSEDsL71vh |
+| Holder grants the agent a key for `unlock` on the escrow only, 0.25 NEAR gas allowance | BXG7955dy8yw5cQJWEyRkqyDMVrfGN6xPNvuDFUL8rYD |
+| **Agent** unlocks g1: lender paid first (202,712), holder credited 197,288 | GkFcibJsrHr6xTe87nh1LcwBWSwJyPWeNYQcNFUcke74 |
+| Refused: agent key calls `withdraw` with 1 yoctoNEAR | "Having a deposit with a function call action is not allowed with a function call access key." |
+| Refused: agent key calls `withdraw` with no deposit | "Transaction method name <withdraw> isn't allowed by the access key." |
+| Holder withdraws 197,288 CLIFF with a wallet-confirmed transaction | 8VLqxQgcNSc9EjsyJdCB5RjyRq8jVvp7ex7hce9w8Hyb |
+| **Check:** `backing()` = 367,712 = `ft_balance_of(contract)` | view calls |
+
+The agent can release vested tokens on schedule. It cannot move anything out of the escrow. Both refusals come from the NEAR protocol's access-key rules; the contract's own 1 yoctoNEAR guard on withdraw is covered by the unit test `after_an_agent_unlock_a_no_deposit_withdraw_is_refused`.
+
+Known limit: a leaked agent key can call unlock repeatedly and spend its 0.25 NEAR gas allowance, which stops agent payday until the holder adds a new key. It cannot change who is paid or move tokens.

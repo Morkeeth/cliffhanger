@@ -60,8 +60,28 @@ echo "8. Holder borrows 50,000 against g1 (wallet-confirmed, from the offer)"
 call "$HOLD" "$VEST" borrow "{\"grant_id\":\"g1\",\"amount\":\"50000\",\"lender\":\"$LEND\"}" '1 yoctoNEAR'
 fi
 if step 9; then
+if [ -n "${AGENT_KEY_FILE:-}" ]; then
+  # Agent payday: the holder grants a key that can call unlock on the escrow and nothing else.
+  APUB=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['pub'])" "$AGENT_KEY_FILE")
+  ASEC=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['sec'])" "$AGENT_KEY_FILE")
+  echo "9a. Holder grants the agent an unlock-only key (allowance 0.25 NEAR for gas)"
+  near account add-key "$HOLD" grant-function-call-access --allowance '0.25 NEAR' --contract-account-id "$VEST" --function-names unlock use-manually-provided-public-key "$APUB" network-config "$NET" sign-with-keychain send 2>&1 | clean | grep -E "Transaction ID|rror" | head -1
+  # Keep the CLI output whole: a refusal counts only if the specific access-key rejection appears and no transaction ran.
+  agent(){ near contract call-function as-transaction "$VEST" "$1" json-args "$2" prepaid-gas '100.0 Tgas' attached-deposit "$3" sign-as "$HOLD" network-config "$NET" sign-with-plaintext-private-key "$ASEC" send 2>&1 | clean || true; }
+  refused(){ # output, required phrase, label
+    if grep -q "Transaction ID" <<<"$1" || ! grep -qF "$2" <<<"$1"; then echo "  !! NOT REFUSED AS EXPECTED: $3"; grep -E "Transaction ID|rror" <<<"$1" | head -3; exit 1; fi
+    echo "  refused as expected: $3 -> $2"; }
+  echo "9b. Agent unlocks g1 with that key: lender paid first"
+  OUT=$(agent unlock '{"grant_id":"g1"}' '0 NEAR')
+  if grep -qE "ExecutionError|panicked" <<<"$OUT" || ! grep -q "Transaction ID" <<<"$OUT"; then echo "  !! AGENT UNLOCK FAILED"; grep -E "rror|panicked" <<<"$OUT" | head -3; exit 1; fi
+  grep -m1 "Transaction ID" <<<"$OUT"
+  echo "9c. Agent tries to withdraw with the same key (must be refused)"
+  refused "$(agent withdraw '{"amount":"1"}' '1 yoctoNEAR')" "not allowed with a function call access key" "agent withdraw with 1 yoctoNEAR"
+  refused "$(agent withdraw '{"amount":"1"}' '0 NEAR')" "isn't allowed by the access key" "agent withdraw without a deposit (method outside the key)"
+else
 echo "9. Holder unlocks g1: lender paid first"
-call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '1 yoctoNEAR'
+call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '0 NEAR'
+fi
 BAL=$(view "$VEST" demo_balance "{\"account_id\":\"$HOLD\"}" | tr -dc '0-9')
 echo "   holder balance inside = $BAL; lender inside = $(view "$VEST" demo_balance "{\"account_id\":\"$LEND\"}")"
 fi
