@@ -136,7 +136,7 @@ Coding agents (Claude Code, Codex and Cursor agents) wrote most of the code unde
 
 ## Libraries and services
 
-near-sdk and near-contract-standards 5.17.2 (Rust), @near-wallet-selector 10.1.4 with MyNearWallet, @near-js, Vite 6 with vite-plugin-node-polyfills, NEAR Intents 1Click API, NEAR public RPC, near-cli-rs 0.31.1 for deploy scripts.
+near-sdk and near-contract-standards 5.17.2 (Rust), @near-wallet-selector 10.1.4 with MyNearWallet, Vite 6 with vite-plugin-node-polyfills and util, NEAR Intents 1Click API, NEAR public RPC, near-cli-rs 0.31.1 for deploy scripts.
 
 ## License
 
