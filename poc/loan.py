@@ -16,19 +16,33 @@ class Rejected(ValueError):
 
 
 def initial():
-    supply = 2_000_000
+    # g3 and g4 start before day 0 so the demo opens with tokens already vested.
+    # Supply covers the original two grants plus these three. Units have no value.
+    supply = 2_820_000
     s = {
         'day': 0,
         'labels': {'note': 'DEMO STATE: seeded local accounts, units have no value'},
-        'wallets': {'dao.treasury': 1_200_000, 'alice': 0, 'lena.lender': 800_000},
+        'wallets': {'dao.treasury': 2_020_000, 'alice': 0, 'lena.lender': 800_000},
         'grants': {
-            'g1': {'title': 'Core contributor grant', 'issuer': 'dao.treasury', 'holder': 'alice',
+            'g1': {'title': 'Core contributor grant', 'token': 'CLIFF', 'issuer': 'dao.treasury', 'holder': 'alice',
                    'total': 365_000, 'start': 0, 'cliff': 90, 'duration': 365,
                    'cancellable': False, 'cancelled_at': None, 'escrow': 0, 'claimed': 0,
                    'pending': 0, 'lien': None},
-            'g2': {'title': 'Advisor grant (cancellable)', 'issuer': 'dao.treasury', 'holder': 'alice',
+            'g2': {'title': 'Advisor grant (cancellable)', 'token': 'CLIFF', 'issuer': 'dao.treasury', 'holder': 'alice',
                    'total': 120_000, 'start': 0, 'cliff': 30, 'duration': 180,
                    'cancellable': True, 'cancelled_at': None, 'escrow': 0, 'claimed': 0,
+                   'pending': 0, 'lien': None},
+            'g3': {'title': 'Engineer grant, already vesting', 'token': 'CLIFF', 'issuer': 'dao.treasury', 'holder': 'alice',
+                   'total': 240_000, 'start': -180, 'cliff': 30, 'duration': 365,
+                   'cancellable': False, 'cancelled_at': None, 'escrow': 0, 'claimed': 0,
+                   'pending': 0, 'lien': None},
+            'g4': {'title': 'Finished grant, fully vested', 'token': 'CLIFF', 'issuer': 'dao.treasury', 'holder': 'alice',
+                   'total': 80_000, 'start': -400, 'cliff': 0, 'duration': 365,
+                   'cancellable': False, 'cancelled_at': None, 'escrow': 0, 'claimed': 0,
+                   'pending': 0, 'lien': None},
+            'g5': {'title': 'Hire still inside the cliff', 'token': 'CLIFF', 'issuer': 'dao.treasury', 'holder': 'alice',
+                   'total': 500_000, 'start': 0, 'cliff': 180, 'duration': 730,
+                   'cancellable': False, 'cancelled_at': None, 'escrow': 0, 'claimed': 0,
                    'pending': 0, 'lien': None},
         },
         'transfers': [], 'events': [], 'supply': supply,
@@ -116,9 +130,15 @@ def options(state, account):
             continue
         q = quote(g, day)
         free = not encumbrance(g) and g['cancelled_at'] is None
-        nxt = 'cliff on day %d' % (g['start'] + g['cliff']) if day < g['start'] + g['cliff'] else 'vesting daily'
+        if unvested(g, day) == 0 and g['cancelled_at'] is None:
+            nxt = 'fully vested'
+        elif day < g['start'] + g['cliff']:
+            nxt = 'cliff on day %d' % (g['start'] + g['cliff'])
+        else:
+            nxt = 'vesting daily'
         out.append({
-            'id': gid, 'title': g['title'], 'total': g['total'], 'vested': vested(g, day),
+            'id': gid, 'title': g['title'], 'token': g.get('token', 'CLIFF'),
+            'total': g['total'], 'vested': vested(g, day),
             'claimed': g['claimed'], 'claimable': claimable(g, day), 'unvested': unvested(g, day),
             'next_unlock': nxt, 'cancellable': g['cancellable'], 'cancelled': g['cancelled_at'] is not None,
             'lien': dict(g['lien'], reserved=reserved(state, gid)) if g['lien'] else None,

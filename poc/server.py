@@ -30,9 +30,17 @@ def view(s, account='alice'):
 
 
 DESK = os.path.join(HERE, 'dashboards.src.html')
-PRICE_BASIS = 2.0   # demo price; the page labels it demo
-DEMO_FUND = {'id': 't1', 'title': 'Ecosystem fund allocation', 'from': 'demo',
-             'pos': {'locked': 2_000_000, 'price_now': PRICE_BASIS, 'months_left': 24, 'cliff_months_left': 6, 'cancellable': False}}
+PRICE_BASIS = 2.0   # demo price for CLIFF rows; the page labels it demo
+# Demo price near the AURORA token quoted by NEAR Intents. Not a live feed.
+AURORA_PRICE = 0.04
+DEMO_FUND = {'id': 't1', 'title': 'Ecosystem fund allocation', 'from': 'demo', 'token': 'CLIFF',
+             'pos': {'locked': 2_000_000, 'price_now': PRICE_BASIS, 'months_left': 24, 'cliff_months_left': 6, 'cancellable': False, 'token': 'CLIFF'}}
+AURORA_BOOK = [
+    {'id': 'aur1', 'title': 'Aurora ecosystem grant', 'from': 'demo', 'token': 'AURORA',
+     'pos': {'locked': 1_000_000, 'price_now': AURORA_PRICE, 'months_left': 18, 'cliff_months_left': 3, 'cancellable': False, 'token': 'AURORA'}},
+    {'id': 'aur2', 'title': 'Aurora contributor, half the term left', 'from': 'demo', 'token': 'AURORA',
+     'pos': {'locked': 400_000, 'price_now': AURORA_PRICE, 'months_left': 9, 'cliff_months_left': 0, 'cancellable': False, 'token': 'AURORA'}},
+]
 
 
 def desk_data(s):
@@ -46,11 +54,13 @@ def desk_data(s):
             continue
         pos = {'locked': left, 'price_now': PRICE_BASIS, 'months_left': max(1, math.ceil(days_left / 30.42)),
                'cliff_months_left': max(0, math.ceil((g['start'] + g['cliff'] - s['day']) / 30.42)),
-               'cancellable': g['cancellable']}
+               'cancellable': g['cancellable'], 'token': g.get('token', 'CLIFF')}
         committed = 'borrowed' if g.get('lien') else 'sold a slice' if g.get('sale') else 'staked' if g.get('stake') else None
         out.append({'id': gid, 'title': g['title'].replace(' (cancellable)', ''), 'from': 'engine',
-                    'committed': committed, 'pos': pos, 'plan': planner.plan(pos)})
-    out.append(dict(DEMO_FUND, committed=None, plan=__import__('planner').plan(DEMO_FUND['pos'])))
+                    'token': pos['token'], 'committed': committed, 'pos': pos, 'plan': planner.plan(pos)})
+    out.append(dict(DEMO_FUND, committed=None, plan=planner.plan(DEMO_FUND['pos'])))
+    for row in AURORA_BOOK:
+        out.append(dict(row, committed=None, plan=planner.plan(row['pos'])))
     return out
 
 
