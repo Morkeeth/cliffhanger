@@ -185,9 +185,20 @@ fn a_settled_withdrawal_frees_the_wallet() {
     assert!(s.withdrawing.is_empty());
 }
 #[test]
+fn an_agent_key_can_unlock_but_not_withdraw() {
+    let mut c = funded_contract();
+    ctx("token.test");
+    c.ft_on_transfer("dao.test".parse().unwrap(), U128(365_000), grant_msg());
+    // Day 0 is inside the 90-day cliff, so nothing unlocks; the call must fail on the schedule, not on a deposit check.
+    ctx("alice.test");
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.unlock("g1".into())));
+    let msg = r.err().and_then(|e| e.downcast_ref::<String>().cloned()).unwrap_or_default();
+    assert!(!msg.contains("yoctoNEAR"), "unlock must not ask for a deposit: {msg}");
+}
+#[test]
 #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
-fn unlock_needs_a_wallet_confirmation() {
+fn withdraw_still_needs_a_wallet_confirmation() {
     let mut c = funded_contract();
     ctx("alice.test");
-    c.unlock("g1".into());
+    let _ = c.withdraw(U128(1));
 }

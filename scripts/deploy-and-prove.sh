@@ -61,7 +61,7 @@ call "$HOLD" "$VEST" borrow "{\"grant_id\":\"g1\",\"amount\":\"50000\",\"lender\
 fi
 if step 9; then
 echo "9. Holder unlocks g1: lender paid first"
-call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '1 yoctoNEAR'
+call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '0 NEAR'
 BAL=$(view "$VEST" demo_balance "{\"account_id\":\"$HOLD\"}" | tr -dc '0-9')
 echo "   holder balance inside = $BAL; lender inside = $(view "$VEST" demo_balance "{\"account_id\":\"$LEND\"}")"
 fi

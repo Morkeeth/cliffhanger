@@ -334,9 +334,10 @@ impl Contract {
         U128(0)
     }
     /// Funded mode: move unlocked tokens into Cliffhanger balances. The lender or buyer is paid first.
-    #[payable]
+    /// No yoctoNEAR here on purpose: a function-call key limited to `unlock` lets an agent run payday.
+    /// Unlock only settles inside the escrow (lender or buyer first, holder credited). It sends no tokens out;
+    /// withdraw and every other value move still need 1 yoctoNEAR, which a function-call key cannot attach.
     pub fn unlock(&mut self, grant_id: String) {
-        near_sdk::assert_one_yocto();
         assert!(self.funded, "unlock needs the funded contract; the demo uses claim");
         self.engine = checked(
             self.current()
