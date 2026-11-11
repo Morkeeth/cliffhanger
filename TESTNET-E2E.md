@@ -85,3 +85,26 @@ An independent review found three ways to lose funds and one init race. A second
 - The contract account's full-access key can redeploy the code, so whoever holds it can drain the contract. There is no owner method, pause or sweep. Tokens sent with a plain `ft_transfer` are stranded.
 - The grant limit is 32 and the wallet limit is 64. Only accounts holding CLIFF can fill them, and the demo keeps the whole supply with the issuer.
 - Stake and collect_rewards stay refused in funded mode.
+
+# Agent payday on testnet (12 Nov 2026)
+
+Oscar's ruling, 12 Nov: unlock runs without wallet confirmation so an agent can run vesting payday. Withdraw and every other money move keep the 1 yoctoNEAR confirmation. Reproduce with `AGENT_KEY_FILE=... scripts/deploy-and-prove.sh`.
+
+| Role | Account |
+|---|---|
+| Token CLIFF | `tok.ch11-lend.testnet` |
+| Vesting contract (live site reads this) | `vest.ch11-lend.testnet` |
+| Issuer / holder / lender | `iss.ch11-hold.testnet` / `hold.ch11-hold.testnet` / `lend.ch11-hold.testnet` |
+
+| Step | Tx |
+|---|---|
+| Deploy and init token | 6XzrbeviMmTDSnkh4j9mcwpECzBoPEa3NhcZf7LQt2oe |
+| Deploy and init vesting | 5gHzKPZXLS8JCFzsocdZ2EW5SdKy7NRaSJhkNh9k7mJo |
+| Holder borrows 50,000 from the lender's offer | CRnzdQauuGkU9gY11cAHJ2ZGK8XvdsautAe61gQafTMY |
+| Holder grants the agent a key for `unlock` on the escrow only, 0.25 NEAR gas allowance | ALUF4BQhnSLG1wsxozZqTyQvpGQzATDZ6BFRCBGht4Kg |
+| **Agent** unlocks g1: lender paid first (202,712), holder credited 197,288 | 2TRxLKd5yeqsfb7G6fhTrJDt1RrGWs5Yz3yq56ESQGAr |
+| Refused: agent key tries `withdraw` | "Having a deposit with a function call action is not allowed with a function call access key." |
+| Holder withdraws 197,288 CLIFF with a wallet-confirmed transaction | 81mAdtbxJ7MAcevJ7QZvHAyMa2a4Ef4TS5Q51VaRUS2p |
+| **Check:** `backing()` = 367,712 = `ft_balance_of(contract)` | view calls |
+
+The agent can release vested tokens on schedule. It cannot move anything out of the escrow.

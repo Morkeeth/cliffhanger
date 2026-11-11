@@ -60,8 +60,22 @@ echo "8. Holder borrows 50,000 against g1 (wallet-confirmed, from the offer)"
 call "$HOLD" "$VEST" borrow "{\"grant_id\":\"g1\",\"amount\":\"50000\",\"lender\":\"$LEND\"}" '1 yoctoNEAR'
 fi
 if step 9; then
+if [ -n "${AGENT_KEY_FILE:-}" ]; then
+  # Agent payday: the holder grants a key that can call unlock on the escrow and nothing else.
+  APUB=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['pub'])" "$AGENT_KEY_FILE")
+  ASEC=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['sec'])" "$AGENT_KEY_FILE")
+  echo "9a. Holder grants the agent an unlock-only key (allowance 0.25 NEAR for gas)"
+  near account add-key "$HOLD" grant-function-call-access --allowance '0.25 NEAR' --contract-account-id "$VEST" --function-names unlock use-manually-provided-public-key "$APUB" network-config "$NET" sign-with-keychain send 2>&1 | clean | grep -E "Transaction ID|rror" | head -1
+  agent(){ near contract call-function as-transaction "$VEST" "$1" json-args "$2" prepaid-gas '100.0 Tgas' attached-deposit "$3" sign-as "$HOLD" network-config "$NET" sign-with-plaintext-private-key "$ASEC" send 2>&1 | clean | grep -E "Transaction ID|ExecutionError|panicked|rror" | sort -u | head -2 || true; }
+  echo "9b. Agent unlocks g1 with that key: lender paid first"
+  agent unlock '{"grant_id":"g1"}' '0 NEAR'
+  echo "9c. Agent tries to withdraw with the same key (must be refused)"
+  OUT=$(agent withdraw '{"amount":"1"}' '1 yoctoNEAR')
+  if grep -qiE "error|panicked" <<<"$OUT" && ! grep -q "Transaction ID" <<<"$OUT"; then echo "  refused as expected: $(head -1 <<<"$OUT")"; else echo "  !! AGENT COULD WITHDRAW: $OUT"; exit 1; fi
+else
 echo "9. Holder unlocks g1: lender paid first"
 call "$HOLD" "$VEST" unlock '{"grant_id":"g1"}' '0 NEAR'
+fi
 BAL=$(view "$VEST" demo_balance "{\"account_id\":\"$HOLD\"}" | tr -dc '0-9')
 echo "   holder balance inside = $BAL; lender inside = $(view "$VEST" demo_balance "{\"account_id\":\"$LEND\"}")"
 fi

@@ -1,4 +1,4 @@
-export const VEST = 'ch11b-vest.testnet';
+export const VEST = 'vest.ch11-lend.testnet';
 export const METHODS = ['unlock', 'withdraw'];
 // Withdraw needs 1 yoctoNEAR so the wallet must confirm it. Unlock takes none, so an agent key can run it.
 export const WITHDRAW_YOCTO = true;
