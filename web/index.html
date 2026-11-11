@@ -210,7 +210,7 @@ async function oneQuote(origin, route, amount){
  if(!j.quote)throw new Error(j.message||('HTTP '+r.status));
  return {label,q:j.quote};
 }
-let LAST=null;
+let LAST=null, SETTLE_SEQ=0;
 function validNear(value){
  const account=String(value||'').trim().toLowerCase();
  if(account.length<2||account.length>64) throw new Error('Enter a mainnet NEAR account');
@@ -273,10 +273,14 @@ async function rpcCall(method, params){
 }
 async function walletSignUrl(tx, callback, wallet){
  const keys=await rpcCall('query',{request_type:'view_access_key_list',finality:'final',account_id:tx.signerId});
- const full=(keys.result.keys||[]).find(k=>k.access_key&&k.access_key.permission==='FullAccess');
- if(!full) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
- const at=keys.raw.indexOf(full.public_key);
- const nonceMatch=keys.raw.slice(Math.max(0, at-400), at+120).match(/"nonce":\s*(\d+)/);
+ const fulls=(keys.result.keys||[]).filter(k=>k.access_key&&k.access_key.permission==='FullAccess');
+ if(!fulls.length) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
+ const chosen=(typeof localStorage!=='undefined'&&localStorage.getItem('cliffhanger.mainnetKey.'+tx.signerId))||'';
+ const full=fulls.find(k=>k.public_key===chosen)||fulls[0];
+ if(fulls.length>1&&!chosen&&typeof confirm==='function'&&!confirm(tx.signerId+' has '+fulls.length+' full-access keys. MyNearWallet must hold '+full.public_key+'. Continue with this key?')) throw new Error('Stopped: pick the key your MyNearWallet holds (localStorage cliffhanger.mainnetKey.'+tx.signerId+')');
+ // Read the nonce of exactly this key; parse it from raw text so values above 2^53 keep every digit.
+ const one=await rpcCall('query',{request_type:'view_access_key',finality:'final',account_id:tx.signerId,public_key:full.public_key});
+ const nonceMatch=one.raw.match(/"nonce":\s*(\d+)/);
  if(!nonceMatch) throw new Error('Could not read the access-key nonce');
  const block=await rpcCall('block',{finality:'final'});
  const encoded=borshTx(tx, full.public_key, BigInt(nonceMatch[1])+1n, block.result.header.hash);
@@ -303,26 +307,30 @@ async function intentStatus(deposit){
 async function settle(label){
  const box=document.getElementById('qsettle');
  box.innerHTML='<span class="cap">Asking 1Click for a deposit address…</span>';
+ const plan=LAST, ticket=++SETTLE_SEQ;
  try{
-  if(!LAST) throw new Error('Quote the choice first');
-  const route=LAST.routes.find(r=>r[0]===label);
+  if(!plan) throw new Error('Quote the choice first');
+  const route=plan.routes.find(r=>r[0]===label);
   if(!route) throw new Error('Unknown route');
   const refund=validNear(document.getElementById('qrefund').value);
   const typed=document.getElementById('qrecv').value.trim();
   const recipient=(route[1]===WRAP||route[1]===AUR_NEAR)?validNear(typed||refund):validEvm(typed);
-  const body={dry:false,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:LAST.origin,depositType:'ORIGIN_CHAIN',destinationAsset:route[1],amount:LAST.amount,refundTo:refund,refundType:'ORIGIN_CHAIN',recipient,recipientType:'DESTINATION_CHAIN',deadline:new Date(Date.now()+30*6e4).toISOString()};
+  const body={dry:false,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:plan.origin,depositType:'ORIGIN_CHAIN',destinationAsset:route[1],amount:plan.amount,refundTo:refund,refundType:'ORIGIN_CHAIN',recipient,recipientType:'DESTINATION_CHAIN',deadline:new Date(Date.now()+30*6e4).toISOString()};
   const r=await fetch(ONECLICK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json();
   if(!j.quote||!j.quote.depositAddress) throw new Error(j.message||('HTTP '+r.status));
-  const q=j.quote, kind=LAST.origin===WRAP?'near':'aurora';
+  if(ticket!==SETTLE_SEQ||LAST!==plan) throw new Error('The quote changed while 1Click answered. Prepare the deposit again.');
+  const q=j.quote, kind=plan.origin===WRAP?'near':'aurora';
+  if(String(q.amountIn)!==String(plan.amount)) throw new Error('1Click returned a different amount than requested. Nothing was prepared.');
+  if(q.depositMemo) throw new Error('This route needs a deposit memo, which this page does not send. Nothing was prepared.');
   const tx=depositTx(kind, refund, q.depositAddress, q.amountIn);
   const back=location.href.split('?')[0]+'?deposit='+encodeURIComponent(q.depositAddress);
-  box.innerHTML=`<p>Send <b>${E(q.amountInFormatted)} ${E(LAST.unit)}</b> to <a href="https://nearblocks.io/address/${E(q.depositAddress)}" target="_blank" rel="noopener">${E(q.depositAddress)}</a> before ${E(q.timeWhenInactive||q.deadline)}. Nothing has been sent.</p><p><button type="button" id="qsign">Sign the deposit in MyNearWallet</button> · <button type="button" id="qstat">Check status</button></p><div id="qstatout" class="cap"></div>`;
+  box.innerHTML=`<p>Send <b>${E(q.amountInFormatted)} ${E(plan.unit)}</b> to <a href="https://nearblocks.io/address/${E(q.depositAddress)}" target="_blank" rel="noopener">${E(q.depositAddress)}</a> before ${E(q.timeWhenInactive||q.deadline)}. Nothing has been sent.</p><p><button type="button" id="qsign">Sign the deposit in MyNearWallet</button> · <button type="button" id="qstat">Check status</button></p><div id="qstatout" class="cap"></div>`;
   document.getElementById('qstat').onclick=()=>intentStatus(q.depositAddress);
   document.getElementById('qsign').onclick=async()=>{
    const btn=document.getElementById('qsign'), out=document.getElementById('qstatout');
    btn.disabled=true; out.textContent='Reading the account key…';
-   try{ location.assign(await walletSignUrl(tx, back, WALLET)); }
+   try{ const url=await walletSignUrl(tx, back, WALLET); localStorage.setItem('cliffhanger.pendingDeposit', q.depositAddress); location.assign(url); }
    catch(err){ btn.disabled=false; out.textContent=err.message; }
   };
  }catch(e){box.innerHTML='<p class="bad">'+E(e.message)+'</p>'}
@@ -331,6 +339,7 @@ async function quote(){
  const t=document.getElementById('qt'), meta=document.getElementById('qmeta');
  t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
  document.getElementById('qsettle').textContent='';
+ LAST=null; SETTLE_SEQ++;
  try{
   const sel=document.getElementById('qgrant').value;
   let spec;
@@ -348,6 +357,13 @@ document.getElementById('qg').onclick=quote;
 const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
 document.getElementById('go').onclick=()=>load(inp.value.trim());
 load(inp.value.trim());
-const pendingDeposit=new URLSearchParams(location.search).get('deposit');
-if(pendingDeposit) intentStatus(pendingDeposit);
+const backParams=new URLSearchParams(location.search);
+const pendingDeposit=backParams.get('deposit')||localStorage.getItem('cliffhanger.pendingDeposit');
+if(pendingDeposit){
+ const box=document.getElementById('qsettle'), hash=(backParams.get('transactionHashes')||'').split(',')[0];
+ if(box) box.innerHTML='<p>Mainnet Intents deposit '+E(pendingDeposit)+(hash?' · <a href="https://nearblocks.io/txns/'+encodeURIComponent(hash)+'" target="_blank" rel="noopener">mainnet transaction</a>':'')+'. Do not fund it again. <button type="button" id="qstat">Check status</button> <button type="button" id="qclear">Clear</button></p><div id="qstatout" class="cap"></div>';
+ const st=document.getElementById('qstat'); if(st) st.onclick=()=>intentStatus(pendingDeposit);
+ const cl=document.getElementById('qclear'); if(cl) cl.onclick=()=>{localStorage.removeItem('cliffhanger.pendingDeposit');box.textContent=''};
+ intentStatus(pendingDeposit);
+}
 </script><script type="module" src="./wallet.js"></script></body></html>

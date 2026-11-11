@@ -144,10 +144,14 @@ async function rpcCall(method, params){
 }
 async function walletSignUrl(tx, callback, wallet){
  const keys=await rpcCall('query',{request_type:'view_access_key_list',finality:'final',account_id:tx.signerId});
- const full=(keys.result.keys||[]).find(k=>k.access_key&&k.access_key.permission==='FullAccess');
- if(!full) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
- const at=keys.raw.indexOf(full.public_key);
- const nonceMatch=keys.raw.slice(Math.max(0, at-400), at+120).match(/"nonce":\s*(\d+)/);
+ const fulls=(keys.result.keys||[]).filter(k=>k.access_key&&k.access_key.permission==='FullAccess');
+ if(!fulls.length) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
+ const chosen=(typeof localStorage!=='undefined'&&localStorage.getItem('cliffhanger.mainnetKey.'+tx.signerId))||'';
+ const full=fulls.find(k=>k.public_key===chosen)||fulls[0];
+ if(fulls.length>1&&!chosen&&typeof confirm==='function'&&!confirm(tx.signerId+' has '+fulls.length+' full-access keys. MyNearWallet must hold '+full.public_key+'. Continue with this key?')) throw new Error('Stopped: pick the key your MyNearWallet holds (localStorage cliffhanger.mainnetKey.'+tx.signerId+')');
+ // Read the nonce of exactly this key; parse it from raw text so values above 2^53 keep every digit.
+ const one=await rpcCall('query',{request_type:'view_access_key',finality:'final',account_id:tx.signerId,public_key:full.public_key});
+ const nonceMatch=one.raw.match(/"nonce":\s*(\d+)/);
  if(!nonceMatch) throw new Error('Could not read the access-key nonce');
  const block=await rpcCall('block',{finality:'final'});
  const encoded=borshTx(tx, full.public_key, BigInt(nonceMatch[1])+1n, block.result.header.hash);
