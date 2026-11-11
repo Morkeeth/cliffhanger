@@ -4,7 +4,7 @@ Your tokens unlock later. Cliffhanger shows what you can do with them today, and
 
 Built at NEAR HACKATHON (window 19 Oct to 14 Nov 2026). Tracks: Unstoppable DeFi, Real-World Money.
 
-**Live:** https://cliffhanger-five.vercel.app (wallet desk) · https://morkeeth.github.io/cliffhanger/ (read-only viewer). Both read the testnet contract `vest.ch11-lend.testnet`.
+**Live:** https://cliffhanger-five.vercel.app (wallet desk) · https://morkeeth.github.io/cliffhanger/ (read-only viewer). Both read the testnet contract `vest.ch11b-iss.testnet`.
 
 For each vesting grant, the holder has three choices:
 
@@ -87,15 +87,15 @@ Build for deploy: `cargo near build non-reproducible-wasm --no-abi` with Rust 1.
 
 ### Real tokens, end to end
 
-The live funded contract is `vest.ch11-lend.testnet`, holding CLIFF from `tok.ch11-lend.testnet`. The first run, before the hardening, used `cliffhanger-vest-8nov.testnet`; both are in TESTNET-E2E.md. In the live contract:
+The live funded contract is `vest.ch11b-iss.testnet`, holding CLIFF from `tok.ch11b-iss.testnet`. The first run, before the hardening, used `cliffhanger-vest-8nov.testnet`; both are in TESTNET-E2E.md. In the live contract:
 - an issuer funds a grant by sending tokens;
 - a lender deposits;
 - the holder borrows, unlocks (the lender is paid first) and withdraws to their own wallet.
 
 `backing()` always equals the contract's token balance. Check it:
 ```
-near contract call-function as-read-only vest.ch11-lend.testnet backing json-args '{}' network-config testnet now
-near contract call-function as-read-only tok.ch11-lend.testnet ft_balance_of json-args '{"account_id":"vest.ch11-lend.testnet"}' network-config testnet now
+near contract call-function as-read-only vest.ch11b-iss.testnet backing json-args '{}' network-config testnet now
+near contract call-function as-read-only tok.ch11b-iss.testnet ft_balance_of json-args '{"account_id":"vest.ch11b-iss.testnet"}' network-config testnet now
 ```
 You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 

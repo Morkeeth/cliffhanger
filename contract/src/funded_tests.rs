@@ -184,16 +184,34 @@ fn a_settled_withdrawal_frees_the_wallet() {
     let s = s.withdraw_settled(SELF, "w.near", 5_000).unwrap();
     assert!(s.withdrawing.is_empty());
 }
+fn ctx_at(predecessor: &str, day: u64) {
+    let mut b = VMContextBuilder::new();
+    b.current_account_id("contract.test".parse().unwrap())
+        .predecessor_account_id(predecessor.parse().unwrap())
+        .block_timestamp(day * 86_400_000_000_000);
+    testing_env!(b.build());
+}
 #[test]
-fn an_agent_key_can_unlock_but_not_withdraw() {
+fn unlock_with_no_deposit_settles_the_vested_amount() {
     let mut c = funded_contract();
     ctx("token.test");
     c.ft_on_transfer("dao.test".parse().unwrap(), U128(365_000), grant_msg());
-    // Day 0 is inside the 90-day cliff, so nothing unlocks; the call must fail on the schedule, not on a deposit check.
-    ctx("alice.test");
-    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.unlock("g1".into())));
-    let msg = r.err().and_then(|e| e.downcast_ref::<String>().cloned()).unwrap_or_default();
-    assert!(!msg.contains("yoctoNEAR"), "unlock must not ask for a deposit: {msg}");
+    // Day 200: past the 90-day cliff, 200 of 365 days vested. No deposit attached, as an agent key sends it.
+    ctx_at("alice.test", 200);
+    c.unlock("g1".into());
+    let alice: AccountId = "alice.test".parse().unwrap();
+    assert_eq!(c.demo_balance(alice).0, 200_000);
+    assert_eq!(c.backing().0, 365_000, "unlock moves nothing out of the contract");
+}
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn after_an_agent_unlock_a_no_deposit_withdraw_is_refused() {
+    let mut c = funded_contract();
+    ctx("token.test");
+    c.ft_on_transfer("dao.test".parse().unwrap(), U128(365_000), grant_msg());
+    ctx_at("alice.test", 200);
+    c.unlock("g1".into());
+    let _ = c.withdraw(U128(200_000));
 }
 #[test]
 #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
