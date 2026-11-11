@@ -82,6 +82,12 @@ def intent_plan(s, q):
         entered_discount=q.get('discount'))
 
 
+def intent_settle(s, q):
+    """Non-dry quote body for one route. The browser posts it. This process does not."""
+    plan = intent_plan(s, q)
+    return intents.settle_request(plan, q['route'], q.get('refund', ''), q.get('recipient', ''))
+
+
 class H(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype='application/json'):
         b = body if isinstance(body, bytes) else json.dumps(body).encode()
@@ -106,6 +112,13 @@ class H(BaseHTTPRequestHandler):
             q = parse_qs(urlparse(self.path).query)
             p = loan.preview_borrow(load(), q['grant'][0], int(q['amount'][0]))
             return self._send(200, p)
+        if self.path.startswith('/api/intent-settle'):
+            from urllib.parse import urlparse, parse_qs
+            q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            try:
+                return self._send(200, intent_settle(load(), q))
+            except (KeyError, ValueError) as e:
+                return self._send(400, {'error': str(e)})
         if self.path.startswith('/api/intent-plan'):
             from urllib.parse import urlparse, parse_qs
             q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
