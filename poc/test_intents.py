@@ -113,5 +113,19 @@ class IntentPlans(unittest.TestCase):
         self.assertNotIn('Sell a slice at 40% off', demo)
 
 
+
+class ReviewFixes(unittest.TestCase):
+    def test_sale_quote_refused_after_borrow(self):
+        import loan, server
+        s = loan.apply(loan.initial(), 'borrow', {'actor': 'alice', 'grant': 'g1', 'amount': 1000})
+        with self.assertRaisesRegex(ValueError, 'already committed'):
+            server.intent_plan(s, {'grant': 'g1', 'choice': 'sell', 'price': '0.0001'})
+
+    def test_blank_discount_is_not_zero(self):
+        for blank in ('', '  '):
+            with self.assertRaisesRegex(ValueError, 'enter a discount'):
+                intents.discount_for(30, blank)
+
+
 if __name__ == '__main__':
     unittest.main()

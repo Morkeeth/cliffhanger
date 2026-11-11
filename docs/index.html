@@ -151,6 +151,7 @@ function yocto(v){const [w,f='']=String(v).trim().split('.');if(!/^\d+$/.test(w)
 function discountFor(months, entered){
  const band=offx(months);
  if(band!=null) return band;
+ if(entered==null||String(entered).trim()==='') throw new Error('No OFFX band between 25 and 35 months; enter a discount');
  const e=Number(entered);
  if(!(e>=0&&e<1)) throw new Error('No OFFX band between 25 and 35 months; enter a discount');
  return e;

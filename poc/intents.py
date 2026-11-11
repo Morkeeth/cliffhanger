@@ -51,7 +51,7 @@ def discount_for(months, entered=None):
     band = offx_discount(months)
     if band is not None:
         return band
-    if entered is None:
+    if entered is None or str(entered).strip() == '':
         raise ValueError('No OFFX band between 25 and 35 months; enter a discount')
     entered = float(entered)
     if not 0 <= entered < 1:
@@ -140,6 +140,8 @@ def plan_position(pos, choice, price=None, amount=None, slice_tokens=None, enter
         note = 'Borrow %s %s.' % (f'{tokens:,}', token)
         discount, pct, sl = None, None, None
     elif kind == 'sell':
+        if pos.get('sell_available') is False and not pos.get('cancellable') and pos.get('unvested'):
+            raise ValueError(pos.get('why_not_sell') or 'This grant is already committed')
         if pos.get('cancellable') or not pos.get('unvested'):
             raise ValueError('A cancellable grant cannot be sold' if pos.get('cancellable') else 'Nothing locked can be sold')
         sl, discount, pct, tokens = _sale(pos['unvested'], months, slice_tokens, entered_discount)
@@ -219,4 +221,6 @@ def position_from_card(card):
         'unvested': card['unvested'], 'claimable': card['claimable'],
         'max_advance': borrow['max_advance'], 'why_not': borrow['why_not'],
         'cancellable': card['cancellable'], 'months_left': sell['months_left'],
+        'sell_available': sell.get('available', True),
+        'why_not_sell': 'This grant is already committed' if card.get('lien') or card.get('sale') else None,
     }
