@@ -34,7 +34,8 @@ a{color:var(--you);text-underline-offset:3px}
 .q input,.q select{font:400 14px 'JetBrains Mono',monospace;padding:6px 8px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink)}
 .q input{width:140px}
 .q button{font:700 14px 'Newsreader',serif;padding:8px 16px;background:var(--you);color:var(--paper);border:0;cursor:pointer}
-#qout{margin-top:12px}
+#qout{margin-top:12px;overflow-x:auto}
+#qsettle,#qmeta{overflow-wrap:anywhere}
 @media (max-width:820px){.page{padding:20px}.tiles{grid-template-columns:1fr 1fr}.notes{columns:1}.who input{width:100%}.tw{overflow-x:auto}}
 </style></head><body><div class="page">
 <div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR testnet. CLIFF is a testnet token with no value.</div></div>
@@ -59,14 +60,17 @@ a{color:var(--you);text-underline-offset:3px}
 <div class="tw"><table id="bals"></table></div>
 
 <h2>Cash a choice out with NEAR Intents</h2>
-<div class="cap">Pick a live grant or a local vested schedule. A CLIFF choice is priced in NEAR at the figure you enter, then quoted, dry, into AURORA on NEAR, AURORA on Ethereum, and USDC on Base. The sale discount is the OFFX band for the months still left on that grant, read from the contract term. A local AURORA grant is quoted by sending the AURORA token itself to wNEAR, to AURORA on Ethereum, and to USDC on Base. Aurora's own chain is not in the live token list. Nothing is sent and no deposit address is created.</div>
+<div class="cap">Pick a live grant or a local vested schedule. A dry quote prices the choice. Prepare deposit then asks 1Click for one deposit address, and MyNearWallet can sign the transfer. A CLIFF choice sends NEAR, wrapped on the way. An AURORA choice sends AURORA you already hold. The sale discount is the OFFX band for the months still left. Aurora's own chain is not in the token list. Stake is not a swap: its rewards are demo tokens. The vesting contract stays on testnet and is not part of this transfer. Nothing moves until you sign.</div>
 <div class="q"><label>Grant<select id="qgrant"></select></label>
 <label>Choice<select id="qchoice"><option value="borrow">Borrow the maximum</option><option value="sell">Sell a quarter of what is locked</option><option value="claim">Cash what has already vested</option></select></label>
 <label>NEAR per CLIFF, you entered it<input id="qpx" value="0.0001" inputmode="decimal"></label>
 <label>Discount, only if the term is 25 to 35 months<input id="qdisc" inputmode="decimal" placeholder="0.55"></label>
+<label>Your mainnet NEAR account<input id="qrefund" placeholder="you.near" spellcheck="false"></label>
+<label>Account that receives it<input id="qrecv" placeholder="you.near or 0x…" spellcheck="false"></label>
 <button id="qg">Quote this choice</button></div>
 <div id="qmeta" class="cap"></div>
 <div id="qout"><table id="qt"></table></div>
+<div id="qsettle"></div>
 
 <h2>More vesting shapes, local only</h2>
 <div class="cap">The funded contract still holds the two CLIFF grants above. These rows match the local demo: a cliff, a grant already vesting, a finished grant, a cancellable grant, and three AURORA schedules with tokens already vested. They are not on chain. Minting more CLIFF needs the issuer key, which this page does not have. Choose one in the quote above.</div>
@@ -81,7 +85,7 @@ a{color:var(--you);text-underline-offset:3px}
 <p>Tokens enter only by token transfer to the contract and leave only by withdrawal, so what it owes should always equal what it holds.</p>
 <p>Staking is refused in this contract, because its rewards would have no tokens behind them. The earlier demo contract still shows it.</p>
 <p>Unlock days count from 1 January 1970, as NEAR block time does; the date beside each is the same day in UTC.</p>
-<p>The Intents quotes are dry runs against the live 1Click API. The vesting contract stays on testnet. It is not deployed on mainnet: the escrow is unaudited, and a dry quote is the mainnet call this demo makes.</p>
+<p>A dry quote does not create a deposit. Prepare deposit does: 1Click returns an address. Sign in MyNearWallet reads your full-access key and a fresh block, then opens the wallet with the transfer. The page never broadcasts that transaction. The vesting contract stays on testnet.</p>
 <p>AURORA routes use the asset ids NEAR Intents publishes. A CLIFF choice receives the bridged AURORA token on NEAR or the same token on Ethereum. An AURORA choice sends that NEAR-bridged token. Recipient addresses in the request are placeholders.</p>
 <p>The sale discount is the OFFX band for the months still left: 40% up to 12 months, 50% for 13 to 24, 60% from 36. A live grant uses borrow.term_days from the contract. Between 25 and 35 months OFFX gives no band, so you enter a discount. The vesting contract is not on mainnet.</p>
 <p>Source and tests: the public repository. Every transaction ID opens in the NEAR testnet explorer.</p>
@@ -122,6 +126,7 @@ link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKE
 document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>';
 
 const ONECLICK='https://1click.chaindefuser.com/v0/quote';
+const WALLET='https://app.mynearwallet.com/sign';
 const WRAP='nep141:wrap.near';
 const AUR_NEAR='nep141:aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near';
 const AUR_ETH='nep141:eth-0xaaaaaa20d9e0e2461697782ef11675f668207961.omft.near';
@@ -191,9 +196,127 @@ async function oneQuote(origin, route, amount){
  if(!j.quote)throw new Error(j.message||('HTTP '+r.status));
  return {label,q:j.quote};
 }
+let LAST=null;
+function validNear(value){
+ const account=String(value||'').trim().toLowerCase();
+ if(account.length<2||account.length>64) throw new Error('Enter a mainnet NEAR account');
+ if(/^[0-9a-f]{64}$/.test(account)||/^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/.test(account)) return account;
+ throw new Error('Enter a mainnet NEAR account');
+}
+function validEvm(value){
+ const address=String(value||'').trim();
+ if(!/^0x[0-9a-fA-F]{40}$/.test(address)||address.toLowerCase()==='0x1111111111111111111111111111111111111111') throw new Error('Enter the 0x address that should receive the asset');
+ return address;
+}
+/* borsh-tx */
+function b58decode(text){
+ const A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+ let n=0n, pad=0;
+ for(const ch of text){
+  const i=A.indexOf(ch);
+  if(i<0) throw new Error('Bad base58');
+  n=n*58n+BigInt(i);
+  if(n===0n) pad++;
+ }
+ if(n===0n) return new Uint8Array(pad);
+ let hex=n.toString(16);
+ if(hex.length%2) hex='0'+hex;
+ const body=Uint8Array.from(hex.match(/../g),h=>parseInt(h,16));
+ const out=new Uint8Array(pad+body.length);
+ out.set(body,pad);
+ return out;
+}
+function concatBytes(parts){
+ const n=parts.reduce((s,p)=>s+p.length,0);
+ const out=new Uint8Array(n);
+ let o=0;
+ for(const p of parts){out.set(p,o);o+=p.length}
+ return out;
+}
+function u32(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,Number(n),true);return b}
+function u64(n){const b=new Uint8Array(8);new DataView(b.buffer).setBigUint64(0,BigInt(n),true);return b}
+function u128(n){let v=BigInt(n);const b=new Uint8Array(16);for(let i=0;i<16;i++){b[i]=Number(v&255n);v>>=8n}return b}
+function bstr(s){const t=new TextEncoder().encode(s);return concatBytes([u32(t.length),t])}
+function actionBytes(action){
+ const p=action.params;
+ const args=new TextEncoder().encode(JSON.stringify(p.args));
+ return concatBytes([Uint8Array.of(2),bstr(p.methodName),concatBytes([u32(args.length),args]),u64(p.gas),u128(p.deposit)]);
+}
+function borshTx(tx, publicKey, nonce, blockHash){
+ const key=b58decode(String(publicKey).replace(/^ed25519:/,''));
+ const hash=b58decode(String(blockHash));
+ if(key.length!==32||hash.length!==32) throw new Error('Expected an ed25519 key and a block hash');
+ const actions=tx.actions.map(actionBytes);
+ return btoa(Array.from(concatBytes([bstr(tx.signerId),Uint8Array.of(0),key,u64(nonce),bstr(tx.receiverId),hash,u32(actions.length),...actions]),b=>String.fromCharCode(b)).join(''));
+}
+/* /borsh-tx */
+async function rpcCall(method, params){
+ const r=await fetch('https://rpc.mainnet.near.org',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'cliffhanger',method,params})});
+ const raw=await r.text();
+ const j=JSON.parse(raw);
+ if(j.error) throw new Error(j.error.data||j.error.message||'NEAR RPC refused the request');
+ return {raw, result:j.result};
+}
+async function walletSignUrl(tx, callback, wallet){
+ const keys=await rpcCall('query',{request_type:'view_access_key_list',finality:'final',account_id:tx.signerId});
+ const full=(keys.result.keys||[]).find(k=>k.access_key&&k.access_key.permission==='FullAccess');
+ if(!full) throw new Error(tx.signerId+' has no full-access key for MyNearWallet to sign with');
+ const at=keys.raw.indexOf(full.public_key);
+ const nonceMatch=keys.raw.slice(Math.max(0, at-400), at+120).match(/"nonce":\s*(\d+)/);
+ if(!nonceMatch) throw new Error('Could not read the access-key nonce');
+ const block=await rpcCall('block',{finality:'final'});
+ const encoded=borshTx(tx, full.public_key, BigInt(nonceMatch[1])+1n, block.result.header.hash);
+ return wallet+'?transactions='+encodeURIComponent(encoded)+'&callbackUrl='+encodeURIComponent(callback);
+}
+function depositTx(kind, signer, depositAccount, amount){
+ const storage={type:'FunctionCall',params:{methodName:'storage_deposit',args:{account_id:depositAccount},gas:'30000000000000',deposit:'1250000000000000000000'}};
+ const transfer={type:'FunctionCall',params:{methodName:'ft_transfer',args:{receiver_id:depositAccount,amount:String(amount),memo:'cliffhanger'},gas:'30000000000000',deposit:'1'}};
+ if(kind==='near'){
+  const wrap={type:'FunctionCall',params:{methodName:'near_deposit',args:{},gas:'30000000000000',deposit:String(amount)}};
+  return {signerId:signer,receiverId:'wrap.near',actions:[storage,wrap,transfer]};
+ }
+ return {signerId:signer,receiverId:'aaaaaa20d9e0e2461697782ef11675f668207961.factory.bridge.near',actions:[storage,transfer]};
+}
+async function intentStatus(deposit){
+ const out=document.getElementById('qstatout')||document.getElementById('qsettle');
+ try{
+  const r=await fetch('https://1click.chaindefuser.com/v0/status?depositAddress='+encodeURIComponent(deposit));
+  const j=await r.json();
+  const done=j.swapDetails&&j.swapDetails.destinationChainTxHashes&&j.swapDetails.destinationChainTxHashes[0];
+  out.textContent=(j.status||'No status')+(done?' · '+done:'');
+ }catch(e){out.textContent=e.message}
+}
+async function settle(label){
+ const box=document.getElementById('qsettle');
+ box.innerHTML='<span class="cap">Asking 1Click for a deposit address…</span>';
+ try{
+  if(!LAST) throw new Error('Quote the choice first');
+  const route=LAST.routes.find(r=>r[0]===label);
+  if(!route) throw new Error('Unknown route');
+  const refund=validNear(document.getElementById('qrefund').value);
+  const typed=document.getElementById('qrecv').value.trim();
+  const recipient=(route[1]===WRAP||route[1]===AUR_NEAR)?validNear(typed||refund):validEvm(typed);
+  const body={dry:false,swapType:'EXACT_INPUT',slippageTolerance:100,originAsset:LAST.origin,depositType:'ORIGIN_CHAIN',destinationAsset:route[1],amount:LAST.amount,refundTo:refund,refundType:'ORIGIN_CHAIN',recipient,recipientType:'DESTINATION_CHAIN',deadline:new Date(Date.now()+30*6e4).toISOString()};
+  const r=await fetch(ONECLICK,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json();
+  if(!j.quote||!j.quote.depositAddress) throw new Error(j.message||('HTTP '+r.status));
+  const q=j.quote, kind=LAST.origin===WRAP?'near':'aurora';
+  const tx=depositTx(kind, refund, q.depositAddress, q.amountIn);
+  const back=location.href.split('?')[0]+'?deposit='+encodeURIComponent(q.depositAddress);
+  box.innerHTML=`<p>Send <b>${E(q.amountInFormatted)} ${E(LAST.unit)}</b> to <a href="https://nearblocks.io/address/${E(q.depositAddress)}" target="_blank" rel="noopener">${E(q.depositAddress)}</a> before ${E(q.timeWhenInactive||q.deadline)}. Nothing has been sent.</p><p><button type="button" id="qsign">Sign the deposit in MyNearWallet</button> · <button type="button" id="qstat">Check status</button></p><div id="qstatout" class="cap"></div>`;
+  document.getElementById('qstat').onclick=()=>intentStatus(q.depositAddress);
+  document.getElementById('qsign').onclick=async()=>{
+   const btn=document.getElementById('qsign'), out=document.getElementById('qstatout');
+   btn.disabled=true; out.textContent='Reading the account key…';
+   try{ location.assign(await walletSignUrl(tx, back, WALLET)); }
+   catch(err){ btn.disabled=false; out.textContent=err.message; }
+  };
+ }catch(e){box.innerHTML='<p class="bad">'+E(e.message)+'</p>'}
+}
 async function quote(){
  const t=document.getElementById('qt'), meta=document.getElementById('qmeta');
  t.innerHTML='<tr><td>Asking 1Click…</td></tr>';
+ document.getElementById('qsettle').textContent='';
  try{
   const sel=document.getElementById('qgrant').value;
   let spec;
@@ -201,13 +324,16 @@ async function quote(){
   else {const o=LIVE.find(x=>x.grant.id===sel.replace(/^live:/,'')); if(!o) throw new Error('Load a holder with grants first'); spec=liveSpec(o)}
   const sized=sizeChoice(spec, document.getElementById('qchoice').value, Number(document.getElementById('qpx').value), document.getElementById('qdisc').value);
   const route=routesFor(spec.token, sized.tokens, Number(document.getElementById('qpx').value));
-  meta.textContent=sized.note+route.note;
+  LAST={origin:route.origin, amount:route.amount, unit:route.unit, routes:route.routes};
+  meta.textContent=sized.note+route.note+' Pick a route to prepare a deposit. Nothing is sent by the quote.';
   const rows=await Promise.all(route.routes.map(r=>oneQuote(route.origin, r, route.amount).catch(e=>({label:r[0],error:e.message}))));
-  t.innerHTML='<tr><th>Route</th><th>You would send</th><th>You would receive</th><th>Quoted value</th></tr>'+rows.map(row=>row.error?`<tr><td>${E(row.label)}</td><td colspan="3" class="bad">${E(row.error)}</td></tr>`:`<tr><td>${E(row.label)}</td><td>${E(row.q.amountInFormatted)} ${route.unit}</td><td>${E(row.q.amountOutFormatted)}</td><td>$${Number(row.q.amountOutUsd).toFixed(2)}</td></tr>`).join('');
- }catch(e){meta.textContent='';t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
+  t.innerHTML='<tr><th>Route</th><th>You would send</th><th>You would receive</th><th>Quoted value</th><th></th></tr>'+rows.map(row=>row.error?`<tr><td>${E(row.label)}</td><td colspan="4" class="bad">${E(row.error)}</td></tr>`:`<tr><td>${E(row.label)}</td><td>${E(row.q.amountInFormatted)} ${route.unit}</td><td>${E(row.q.amountOutFormatted)}</td><td>$${Number(row.q.amountOutUsd).toFixed(2)}</td><td><button type="button" onclick="settle('${E(row.label)}')">Prepare deposit</button></td></tr>`).join('');
+ }catch(e){LAST=null;meta.textContent='';t.innerHTML='<tr><td class="bad">No quote: '+E(e.message)+'</td></tr>'}
 }
 document.getElementById('qg').onclick=quote;
 const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
 document.getElementById('go').onclick=()=>load(inp.value.trim());
 load(inp.value.trim());
+const pendingDeposit=new URLSearchParams(location.search).get('deposit');
+if(pendingDeposit) intentStatus(pendingDeposit);
 </script></body></html>

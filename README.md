@@ -16,7 +16,7 @@ Built for the NEAR hackathon (1 to 14 Nov 2026).
 
 https://morkeeth.github.io/cliffhanger/
 
-This page reads the funded contract from NEAR testnet. It does not connect a wallet or sign transactions. Choose a holder and load grants; see contract backing, actual token balance and available actions. The Intents quote is a mainnet dry run, with no transfer.
+This page reads the funded contract from NEAR testnet. It does not sign the vesting contract. Choose a holder and load grants; see contract backing, actual token balance and available actions. A dry Intents quote prices a choice. Prepare deposit returns a mainnet deposit address and a MyNearWallet link. The page does not broadcast that transfer.
 
 The treasury planner below runs locally and remains distinct from this on-chain viewer.
 
@@ -29,13 +29,13 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
    cd poc
    python3 test_loan.py && python3 test_choices.py && python3 test_planner.py && python3 test_intents.py
    ```
-   You see `OK` four times: 12 loan tests, 10 choice tests, 10 planner tests, 8 intent tests. The intent tests build dry quote requests and do not call the network.
+   You see `OK` four times: 12 loan tests, 10 choice tests, 10 planner tests, 9 intent tests. The intent tests build the quote and the wallet transaction. They do not call the network and they do not sign.
 
 2. Start the local demo.
    ```
    python3 server.py --port 8931
    ```
-   Open http://127.0.0.1:8931. You see five CLIFF grants: one still in its cliff, one not yet vesting, one already vesting, one fully vested, and one the issuer can cancel. Borrow, sell a slice, stake, claim, and step time forward with **+30 days**. Each claim pays the lender or the buyer first. The 24-month hire sells at 50% off; a grant with a year or less left sells at 40% off. Below those cards are three AURORA grants, two already vesting and one fully vested. They are not in the CLIFF ledger. **Dry quote** on a card asks NEAR Intents for that choice. A CLIFF quote spends NEAR at the price you enter. An AURORA quote spends the AURORA token.
+   Open http://127.0.0.1:8931. You see five CLIFF grants: one still in its cliff, one not yet vesting, one already vesting, one fully vested, and one the issuer can cancel. Borrow, sell a slice, stake, claim, and step time forward with **+30 days**. Each claim pays the lender or the buyer first. The 24-month hire sells at 50% off; a grant with a year or less left sells at 40% off. Below those cards are three AURORA grants, two already vesting and one fully vested. They are not in the CLIFF ledger. **Dry quote** prices the choice. **Prepare deposit** asks NEAR Intents for one deposit address. Enter your mainnet NEAR account first. A CLIFF choice sends NEAR. An AURORA choice sends AURORA. The link opens MyNearWallet with the transfer ready to sign. This page does not sign it.
 
 3. Ask the planner about a position.
    ```
@@ -54,7 +54,7 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
    You see 43 tests pass. To build the deployable WASM, see contract/README.md.
 
 6. Open the on-chain page.
-   Open `web/index.html` in a browser. It reads the live testnet contract directly: what the contract owes, what it holds, the holder's grants and what they can do today. Choose a live grant or a local row, then a choice. A CLIFF choice is priced in NEAR at the figure you enter. The sale uses the OFFX discount for the months still left (`term_days` on a live grant). The page asks NEAR Intents for three dry quotes: AURORA on NEAR, AURORA on Ethereum, and USDC on Base. A local AURORA row is quoted by sending that AURORA token to wNEAR, to AURORA on Ethereum, and to USDC on Base. The table under the quote is the local book, not extra tokens on the contract. https://morkeeth.github.io/cliffhanger/ serves this file only after it is merged. This change does not merge or deploy.
+   Open `web/index.html` in a browser. It reads the live testnet contract directly: what the contract owes, what it holds, the holder's grants and what they can do today. Choose a live grant or a local row, then a choice. A dry quote prices three routes. Prepare deposit, on one route, asks 1Click for a deposit address and offers a MyNearWallet transfer. A CLIFF choice sends NEAR. A local AURORA row sends AURORA. The sale uses the OFFX discount for the months still left (`term_days` on a live grant). The table under the quote is the local book, not extra tokens on the contract. https://morkeeth.github.io/cliffhanger/ serves this file only after it is merged. This change does not merge or deploy.
 
 ## On NEAR testnet
 
@@ -92,8 +92,8 @@ You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 
 ## What is not built
 
-- **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The demo and the on-chain page ask the 1Click API for dry quotes sized to a real choice. CLIFF choices can arrive as the AURORA token on NEAR or on Ethereum, or as USDC on Base. A vested AURORA grant is quoted by sending the AURORA token. Aurora's own chain is not in the live token list, so the page does not invent a route there. Stake is not quoted: it pays demo rewards, not cash Intents can swap. Nothing is sent. The vesting contract is not on mainnet: the escrow is unaudited, testnet is enough for this hackathon, and the only mainnet call is that dry quote.
-- **Wallet sign-in.** Actions are signed with the NEAR CLI today. Signing in with a wallet from the page is not built yet.
+- **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The demo and the on-chain page price a choice with a dry quote, then Prepare deposit asks 1Click for one deposit address. A CLIFF choice is funded with NEAR. A vested AURORA grant is funded with AURORA. The holder signs that transfer in MyNearWallet: the page reads the account's full-access key and a fresh block, then opens the wallet with the unsigned transaction. Aurora's own chain is not in the live token list, so the page does not invent a route there. Stake is not a swap: it pays demo rewards. The page does not broadcast the transfer. The vesting contract is not on mainnet: the escrow is unaudited, and it is not the account that pays Intents.
+- **Wallet sign-in for the vesting contract.** Borrow, sell, unlock and withdraw on the testnet escrow are still signed with the NEAR CLI, by the holder account that owns the grants. The page's wallet link is only the mainnet Intents deposit.
 - **A real staking pool.** The demo contract mints demo rewards. The funded contract refuses to stake, because those rewards would have no tokens behind them.
 
 ## Layout
