@@ -2,3 +2,6 @@ target/
 __pycache__/
 poc/state.json
 .DS_Store
+
+node_modules/
+dist/

@@ -18,6 +18,29 @@ https://morkeeth.github.io/cliffhanger/
 
 This page reads the funded contract from NEAR testnet. It does not connect a wallet or sign transactions. Choose a holder and load grants; see contract backing, actual token balance and available actions. The Intents quote is a mainnet dry run, with no transfer.
 
+## Local wallet journey (prepared 11 November; not published)
+
+Node 22 or later is required. From the repository root:
+
+```
+npm ci --ignore-scripts
+npm test
+npm run build
+npm run dev
+```
+
+Open http://127.0.0.1:8932. The local desk adds testnet MyNearWallet account selection, a separate review and confirmation for each unlock or withdrawal, and final receipt checks. Connect does not request a function-call access key. The batch signing path asks MyNearWallet to approve every transaction, including if the browser already has an old access key. Package versions and dependency integrity are pinned in package-lock.json. `dist/` is the build to host when publication is authorized; the existing public viewer remains unchanged.
+
+Human wallet steps still required:
+
+1. Click **Connect testnet wallet**, and select a testnet account you control in MyNearWallet. No account is created or funded by this page.
+2. Click **Read my account**. An account without a funded grant sees no unlocks. The existing funded holder is `cliffhanger-holder-8nov.testnet`; its key has not been imported into a browser by this work. A fresh wallet requires an issuer-funded grant and token storage registration before a real withdrawal can be exercised.
+3. For an available grant, click **Unlock g1**, review the preview, then **Confirm testnet transaction** and approve in MyNearWallet. Unlock pays a lender/buyer first and credits the rest inside Cliffhanger.
+4. Wait for refreshed balances. Enter a whole CLIFF amount no larger than the available balance, click **Review withdrawal**, then **Confirm testnet transaction** and approve in MyNearWallet. Check the final receipt and wallet balance. A failed token transfer restores the contract balance and is not reported as a completed withdrawal.
+5. Disconnect when finished. No operation is retried automatically.
+
+The automated controller exercise uses a controlled in-memory wallet, DOM and RPC response. It checks account binding, separate review/confirmation, gas, exact amounts, callback failure, account switching, and no automatic retry. It is **not** proof that a real browser wallet or a new on-chain transaction completed. No wallet/key/permission was created, no transaction was signed, and nothing was published in this pass. A reload in the existing Chrome window confirmed the enabled connect button and live backing/grant reads after fixing browser SDK polyfills. A human-approved real wallet run remains required. Browser borrow/repay/sell controls, issuer onboarding, restricted agent signing, real staking and executed Intents payout remain outside this slice.
+
 The treasury planner below runs locally and remains distinct from this on-chain viewer.
 
 ## Try it: do X, see Y

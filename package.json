@@ -1,0 +1,22 @@
+{
+  "name": "cliffhanger-testnet-desk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite web --config vite.config.js --host 127.0.0.1 --port 8932",
+    "build": "vite build web --config vite.config.js --base ./ --outDir ../dist",
+    "test": "node --experimental-vm-modules --test web/wallet-*.test.js"
+  },
+  "dependencies": {
+    "@near-wallet-selector/core": "10.1.4",
+    "@near-wallet-selector/my-near-wallet": "10.1.4",
+    "util": "0.12.5"
+  },
+  "devDependencies": {
+    "vite": "6.4.6",
+    "vite-plugin-node-polyfills": "0.24.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

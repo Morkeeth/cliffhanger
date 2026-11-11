@@ -52,6 +52,14 @@ a{color:var(--you);text-underline-offset:3px}
 <div id="err"></div>
 <div class="tw"><table id="grants"></table></div>
 
+<h2>Your testnet wallet</h2>
+<div class="cap">Connect only when you want to act. Connect selects your account without requesting a function-call key. Review each unlock or withdrawal, then approve its transaction in MyNearWallet. Signing uses testnet NEAR for gas; CLIFF has no value.</div>
+<div class="q"><button id="wallet-connect" disabled>Loading wallet…</button><button id="wallet-own" hidden>Read my account</button></div>
+<p id="wallet-status" role="status" aria-live="polite">Loading the testnet wallet connector…</p>
+<div id="wallet-actions" hidden><div id="wallet-unlock" class="q"></div>
+<div class="q"><label>Whole CLIFF to withdraw<input id="wallet-amount" inputmode="numeric" autocomplete="off"></label><button id="wallet-withdraw">Review withdrawal</button><span id="wallet-balance"></span></div></div>
+<p id="wallet-preview"></p><div class="q"><button id="wallet-confirm" hidden>Confirm testnet transaction</button></div><p id="wallet-result"></p>
+
 <h2>What this holder can do today</h2>
 <div class="tw"><table id="opts"></table></div>
 
@@ -75,7 +83,7 @@ a{color:var(--you);text-underline-offset:3px}
 <div class="tw"><table id="txs"></table></div>
 
 <div class="notes">
-<p>Every number above is read from NEAR testnet when the page loads, through public view calls. Nothing is signed and nothing is stored.</p>
+<p>Every number above is read from NEAR testnet when the page loads, through public view calls. Read grants uses public view calls. Wallet actions run only after you connect, review and confirm; Connect stores account selection in this browser; this desk does not request a function-call key.</p>
 <p>The holder is paid after the lender: each unlock repays the loan first, fee included, then the rest goes to the holder.</p>
 <p>Tokens enter only by token transfer to the contract and leave only by withdrawal, so what it owes should always equal what it holds.</p>
 <p>Staking is refused in this contract, because its rewards would have no tokens behind them. The earlier demo contract still shows it.</p>
@@ -102,10 +110,14 @@ async function view(contract,method,args){
  return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 function link(el,a){el.textContent=a;el.href=ACC(a)}
+let readSequence=0;
 async function load(holder){
+ const request=++readSequence;
+ window.dispatchEvent(new Event('cliffhanger-loading'));
  document.getElementById('err').textContent='';
  try{
   const [bk,hb,wl,gr,op,hbal,lbal]=await Promise.all([view(VEST,'backing'),view(TOKEN,'ft_balance_of',{account_id:VEST}),view(TOKEN,'ft_balance_of',{account_id:holder}),view(VEST,'get_grants',{account_id:holder}),view(VEST,'options',{account_id:holder}),view(VEST,'demo_balance',{account_id:holder}).catch(()=>null),view(VEST,'demo_balance',{account_id:LENDER}).catch(()=>null)]);
+  if(request!==readSequence)return;
   document.getElementById('bk').textContent=n(bk);document.getElementById('hb').textContent=n(hb);
   const ok=document.getElementById('ok');ok.textContent=bk===hb?'Match':'Mismatch';ok.className='fig'+(bk===hb?'':' bad');
   document.getElementById('wl').textContent=n(wl);
@@ -115,7 +127,8 @@ async function load(holder){
   LIVE=op;
   document.getElementById('qgrant').innerHTML=op.map(o=>`<option value="${E(o.grant.id)}">${E(o.grant.id)} · ${E(o.grant.title)}</option>`).join('');
   document.getElementById('at').textContent='Read from testnet at '+new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
- }catch(e){document.getElementById('err').textContent='Could not read the chain: '+e.message}
+  window.dispatchEvent(new CustomEvent('cliffhanger-loaded',{detail:{holder,options:op,balance:hbal}}));
+ }catch(e){if(request!==readSequence)return;document.getElementById('err').textContent='Could not read the chain: '+e.message}
 }
 link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKEN);
 document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>';
@@ -172,4 +185,4 @@ document.getElementById('qg').onclick=quote;
 const inp=document.getElementById('acct');inp.value=new URLSearchParams(location.search).get('account')||HOLDER;
 document.getElementById('go').onclick=()=>load(inp.value.trim());
 load(inp.value.trim());
-</script></body></html>
+</script><script type="module" src="./wallet.js"></script></body></html>
