@@ -88,3 +88,18 @@ test('the wallet controller follows the page network', async () => {
   assert.deepEqual(testnet.seen, {walletUrl: 'https://testnet.mynearwallet.com', network: 'testnet'});
   await assert.rejects(controller(undefined), /Unknown NEAR network/);
 });
+
+test('each full inline page script compiles', () => {
+  for (const [page, src] of Object.entries(pages)) {
+    const inline = [...src.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+    assert.ok(inline.length >= 1, page);
+    for (const code of inline) assert.doesNotThrow(() => new vm.Script(code), page);
+  }
+});
+
+test('no visible copy says testnet except through the network name', () => {
+  for (const [page, src] of Object.entries(pages)) {
+    const rest = src.replace(block(src), '').replace(/<span class="netname">testnet<\/span>/g, '').replace(/<span class="tn-only">[\s\S]*?<\/span>/g, '').replace(/<title>[^<]*<\/title>/, '').replace(/NET_NAME[!=]==?'testnet'/g, '');
+    assert.doesNotMatch(rest, /testnet/i, page);
+  }
+});

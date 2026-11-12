@@ -29,7 +29,7 @@ Use near-cli-rs 0.31.1 (`npx -y near-cli-rs@0.31.1`, shown as `near`). Keys go t
    NET=mainnet TOK=cliff.morkeeth.near VEST=vest.morkeeth.near ISS=morkeeth.near HOLD=hold.morkeeth.near LEND=lend.morkeeth.near scripts/deploy-and-prove.sh
    The script needs the lender to hold CLIFF, so step 4 of the script sends it 1,000,000 from morkeeth.near.
 5. **Optional, OSCAR CLICK.** Agent payday on mainnet: add `AGENT_KEY_FILE=/path/agent.json` to step 4. The script adds a key to `hold.morkeeth.near` that can only call `unlock` on `vest.morkeeth.near`, with a 0.25 NEAR gas allowance, runs the unlock as the agent and checks that the same key cannot withdraw. Remove that key afterwards with `near account delete-keys hold.morkeeth.near public-keys <agent public key> network-config mainnet sign-with-keychain send`.
-6. No signing. Point the site at mainnet: change the contract names in `web/index.html`, `docs/index.html` and `web/wallet-policy.js`, and the wallet network from testnet to mainnet, then redeploy. This step is a separate code change with its own review.
+6. No signing. Point the site at mainnet: merge branch `mainnet-switch` and redeploy. Mainnet is then at `?net=mainnet`, and testnet stays the default. To make mainnet the default, set `const DEFAULT_NET='mainnet';` in both `web/index.html` and `docs/index.html`, and change the default assertion in `web/wallet-network.test.js`.
 
 ## What to say in the demo
 

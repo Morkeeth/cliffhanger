@@ -38,7 +38,7 @@ a{color:var(--you);text-underline-offset:3px}
 #qsettle,#qmeta{overflow-wrap:anywhere}
 @media (max-width:820px){.page{padding:20px}.tiles{grid-template-columns:1fr 1fr}.notes{columns:1}.who input{width:100%}.tw{overflow-x:auto}}
 </style></head><body><div class="page">
-<div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR <span class="netname">testnet</span>. CLIFF is a token with no value.</div></div>
+<div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR <span class="netname">testnet</span>. CLIFF is a <span class="netname">testnet</span> token with no value.</div></div>
 <div class="meta">Contract <a id="cl" target="_blank" rel="noopener"></a><br>Token <a id="tl" target="_blank" rel="noopener"></a><br><span id="at">Reading the chain…</span></div></div>
 
 <div class="tiles">
@@ -56,10 +56,10 @@ a{color:var(--you);text-underline-offset:3px}
 <h2>Your <span class="netname">testnet</span> wallet</h2>
 <div class="cap">Connect only when you want to act. Connect selects your account without requesting a function-call key. Review each unlock or withdrawal, then approve its transaction in MyNearWallet. Signing uses <span class="netname">testnet</span> NEAR for gas; CLIFF has no value.</div>
 <div class="q"><button id="wallet-connect" disabled>Loading wallet…</button><button id="wallet-own" hidden>Read my account</button></div>
-<p id="wallet-status" role="status" aria-live="polite">Loading the testnet wallet connector…</p>
+<p id="wallet-status" role="status" aria-live="polite">Loading the <span class="netname">testnet</span> wallet connector…</p>
 <div id="wallet-actions" hidden><div id="wallet-unlock" class="q"></div>
 <div class="q"><label>Whole CLIFF to withdraw<input id="wallet-amount" inputmode="numeric" autocomplete="off"></label><button id="wallet-withdraw">Review withdrawal</button><span id="wallet-balance"></span></div></div>
-<p id="wallet-preview"></p><div class="q"><button id="wallet-confirm" hidden>Confirm testnet transaction</button></div><p id="wallet-result"></p>
+<p id="wallet-preview"></p><div class="q"><button id="wallet-confirm" hidden>Confirm <span class="netname">testnet</span> transaction</button></div><p id="wallet-result"></p>
 
 <h2>What this holder can do today</h2>
 <div class="tw"><table id="opts"></table></div>
@@ -68,7 +68,7 @@ a{color:var(--you);text-underline-offset:3px}
 <div class="tw"><table id="bals"></table></div>
 
 <h2>Cash a choice out with NEAR Intents</h2>
-<div class="cap">Pick a live grant or a local vested schedule. A dry quote prices the choice. Prepare deposit then asks 1Click for one deposit address, and MyNearWallet can sign the transfer. A CLIFF choice sends NEAR, wrapped on the way. An AURORA choice sends AURORA you already hold. The sale discount is the OFFX band for the months still left. Aurora's own chain is not in the token list. Stake is not a swap: its rewards are demo tokens. The vesting contract stays on testnet and is not part of this transfer. Nothing moves until you sign.</div>
+<div class="cap">Pick a live grant or a local vested schedule. A dry quote prices the choice. Prepare deposit then asks 1Click for one deposit address, and MyNearWallet can sign the transfer. A CLIFF choice sends NEAR, wrapped on the way. An AURORA choice sends AURORA you already hold. The sale discount is the OFFX band for the months still left. Aurora's own chain is not in the token list. Stake is not a swap: its rewards are demo tokens. The vesting contract stays on <span class="netname">testnet</span> and is not part of this transfer. Nothing moves until you sign.</div>
 <div class="q"><label>Grant<select id="qgrant"></select></label>
 <label>Choice<select id="qchoice"><option value="borrow">Borrow the maximum</option><option value="sell">Sell a quarter of what is locked</option><option value="claim">Cash what has already vested</option></select></label>
 <label>NEAR per CLIFF, you entered it<input id="qpx" value="0.0001" inputmode="decimal"></label>
