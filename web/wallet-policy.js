@@ -1,13 +1,23 @@
-export const VEST = 'vest.ch11b-iss.testnet';
+// Wallet side of the network switch. The page script picks the network (DEFAULT_NET or ?net=) and passes it here.
+// Contract names must match NETS in web/index.html and docs/index.html; wallet-network.test.js checks it.
+export const NETWORKS = {
+  testnet: { id: 'testnet', vest: 'vest.ch11b-iss.testnet', suffix: '.testnet', walletUrl: 'https://testnet.mynearwallet.com', rpc: 'https://rpc.testnet.near.org', tx: 'https://explorer.testnet.near.org/transactions/' },
+  mainnet: { id: 'mainnet', vest: 'vest.morkeeth.near', suffix: '.near', walletUrl: 'https://app.mynearwallet.com', rpc: 'https://rpc.mainnet.near.org', tx: 'https://nearblocks.io/txns/' },
+};
+export function network(name) {
+  if (!Object.prototype.hasOwnProperty.call(NETWORKS, name)) throw new Error('Unknown NEAR network: ' + name);
+  return NETWORKS[name];
+}
 export const METHODS = ['unlock', 'withdraw'];
 // Withdraw needs 1 yoctoNEAR so the wallet must confirm it. Unlock takes none, so an agent key can run it.
 export const WITHDRAW_YOCTO = true;
-export function transaction(account, viewed, method, args) {
-  if (!account || account !== viewed || !account.endsWith('.testnet')) throw new Error('Read your connected testnet account before signing.');
+export function transaction(net, account, viewed, method, args) {
+  const { id, vest, suffix } = network(net);
+  if (!account || account !== viewed || !account.endsWith(suffix)) throw new Error(`Read your connected ${id} account before signing.`);
   if (!METHODS.includes(method)) throw new Error('This desk only signs unlock and withdraw.');
   if (method === 'unlock' && (typeof args.grant_id !== 'string' || !args.grant_id)) throw new Error('Choose a grant.');
   if (method === 'withdraw' && !/^[1-9]\d*$/.test(args.amount)) throw new Error('Enter a positive whole number of CLIFF.');
-  return { signerId: account, receiverId: VEST, actions: [{ type: 'FunctionCall', params: { methodName: method, args, gas: '100000000000000', deposit: method === 'withdraw' && WITHDRAW_YOCTO ? '1' : '0' } }] };
+  return { signerId: account, receiverId: vest, actions: [{ type: 'FunctionCall', params: { methodName: method, args, gas: '100000000000000', deposit: method === 'withdraw' && WITHDRAW_YOCTO ? '1' : '0' } }] };
 }
 export function executionError(outcome, method) {
   if (!outcome || typeof outcome.status !== 'object') return 'Waiting for a final execution result.';

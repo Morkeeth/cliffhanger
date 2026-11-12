@@ -13,7 +13,7 @@ test('actual controller: account-only connect, unlock, withdrawal failure, ident
   const wallet={signIn:async args=>{signInArgs=args},signOut:async()=>{},signAndSendTransactions:async args=>{sent.push(args);return [result]}};
   const selector={wallet:async()=>wallet,store:{getState:()=>({accounts:account?[{active:true,accountId:account}]:[]}),observable:{subscribe:fn=>{storeListener=fn}}}};
   $('go').click=()=>{reads++};
-  const context=vm.createContext({console,URLSearchParams,BigInt,location:{search:'',origin:'http://localhost',pathname:'/'},document:{getElementById:$,createElement:element},window:{addEventListener:(name,fn)=>{listeners[name]=fn}},fetch:async()=>({ok:true,json:async()=>({result})})});
+  const context=vm.createContext({console,URLSearchParams,BigInt,location:{search:'',origin:'http://localhost',pathname:'/'},document:{getElementById:$,createElement:element},window:{CLIFF_NET:'testnet',addEventListener:(name,fn)=>{listeners[name]=fn}},fetch:async()=>({ok:true,json:async()=>({result})})});
   const source=await fs.readFile(new URL('./wallet.js',import.meta.url),'utf8');
   const module=new vm.SourceTextModule(source,{context});
   await module.link(async spec=>{

@@ -38,7 +38,7 @@ a{color:var(--you);text-underline-offset:3px}
 #qsettle,#qmeta{overflow-wrap:anywhere}
 @media (max-width:820px){.page{padding:20px}.tiles{grid-template-columns:1fr 1fr}.notes{columns:1}.who input{width:100%}.tw{overflow-x:auto}}
 </style></head><body><div class="page">
-<div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR testnet. CLIFF is a testnet token with no value.</div></div>
+<div class="head"><div><h1>Cliffhanger, on chain</h1><div class="cap">Vesting grants with three choices, read live from NEAR <span class="netname">testnet</span>. CLIFF is a token with no value.</div></div>
 <div class="meta">Contract <a id="cl" target="_blank" rel="noopener"></a><br>Token <a id="tl" target="_blank" rel="noopener"></a><br><span id="at">Reading the chain…</span></div></div>
 
 <div class="tiles">
@@ -80,30 +80,43 @@ a{color:var(--you);text-underline-offset:3px}
 <div class="tw"><table id="txs"></table></div>
 
 <div class="notes">
-<p>Every number above is read from NEAR testnet when the page loads, through public view calls. Nothing is signed and nothing is stored.</p>
+<p>Every number above is read from NEAR <span class="netname">testnet</span> when the page loads, through public view calls. Nothing is signed and nothing is stored.</p>
 <p>The holder is paid after the lender: each unlock repays the loan first, fee included, then the rest goes to the holder.</p>
 <p>Tokens enter only by token transfer to the contract and leave only by withdrawal, so what it owes should always equal what it holds.</p>
 <p>Staking is refused in this contract, because its rewards would have no tokens behind them. The earlier demo contract still shows it.</p>
 <p>Unlock days count from 1 January 1970, as NEAR block time does; the date beside each is the same day in UTC.</p>
-<p>A dry quote does not create a deposit. Prepare deposit does: 1Click returns an address. Sign in MyNearWallet reads your full-access key and a fresh block, then opens the wallet with the transfer. The page never broadcasts that transaction. The vesting contract stays on testnet.</p>
+<p>A dry quote does not create a deposit. Prepare deposit does: 1Click returns an address. Sign in MyNearWallet reads your full-access key and a fresh block, then opens the wallet with the transfer. The page never broadcasts that transaction.<span class="tn-only"> The vesting contract stays on testnet.</span></p>
 <p>AURORA routes use the asset ids NEAR Intents publishes. A CLIFF choice receives the bridged AURORA token on NEAR or the same token on Ethereum. An AURORA choice sends that NEAR-bridged token. Recipient addresses in the request are placeholders.</p>
-<p>The sale discount is the OFFX band for the months still left: 40% up to 12 months, 50% for 13 to 24, 60% from 36. A live grant uses borrow.term_days from the contract. Between 25 and 35 months OFFX gives no band, so you enter a discount. The vesting contract is not on mainnet.</p>
-<p>Source and tests: <a href="https://github.com/Morkeeth/cliffhanger">the public repository</a>. Every transaction ID opens in the NEAR testnet explorer.</p>
+<p>The sale discount is the OFFX band for the months still left: 40% up to 12 months, 50% for 13 to 24, 60% from 36. A live grant uses borrow.term_days from the contract. Between 25 and 35 months OFFX gives no band, so you enter a discount.<span class="tn-only"> The vesting contract is not on mainnet.</span></p>
+<p>Source and tests: <a href="https://github.com/Morkeeth/cliffhanger">the public repository</a>. Every transaction ID opens in the NEAR <span class="netname">testnet</span> explorer.</p>
 </div>
 </div>
 <script>
-const RPC='https://rpc.testnet.near.org';
-const VEST='vest.ch11b-iss.testnet', TOKEN='tok.ch11b-iss.testnet';
-const HOLDER='hold.ch11b-hold.testnet', LENDER='lend.ch11b-hold.testnet';
-const EXP=id=>'https://explorer.testnet.near.org/transactions/'+id;
-const ACC=a=>'https://explorer.testnet.near.org/accounts/'+a;
-const TXS=[['Deploy the CLIFF token','AUQEhhtP1fXPnAncG3FRSrmw4Eg2njxF3UsbZ43GRp4i'],['Deploy the funded vesting contract','FodJzhEmqR5aHps2dD2ZwRZQn81PiyWmRBjHSQvrPsoZ'],['Issuer funds grant g1 with 365,000 CLIFF','8TVKCRiF8UE1Wp6CfkBreHWWX9Eg6EKWBAZ61TrEg8Ye'],['Issuer funds grant g2 with 120,000 CLIFF','7jtNGFVGfrF7aUY11MXYcE3foDnp9Q58R9KjahuvzkDC'],['Lender deposits 200,000 CLIFF','EQ1x33qSUYYWjRMnBz7oPssfbsxhnQAcNd23tnAN9oup'],['Holder borrows 50,000 against g1','DUPUu5HnfYdiAgqN1eAh67aMeusGfgvS8Bu1KLDZaPYG'],['Unlock: lender paid 52,712 first, holder gets the rest','8f6EsnaSrGAFYiTTgHyjdJErd547hqozsaC9WTLDPir1']];
+// Network switch. Testnet is the default. ?net=mainnet reads mainnet. To make mainnet the default, change the next line only.
+const DEFAULT_NET='testnet';
+const NETS={
+ testnet:{rpc:'https://rpc.testnet.near.org',vest:'vest.ch11b-iss.testnet',token:'tok.ch11b-iss.testnet',holder:'hold.ch11b-hold.testnet',lender:'lend.ch11b-hold.testnet',tx:'https://explorer.testnet.near.org/transactions/',account:'https://explorer.testnet.near.org/accounts/'},
+ mainnet:{rpc:'https://rpc.mainnet.near.org',vest:'vest.morkeeth.near',token:'cliff.morkeeth.near',holder:'hold.morkeeth.near',lender:'lend.morkeeth.near',tx:'https://nearblocks.io/txns/',account:'https://nearblocks.io/address/'}
+};
+const NET_ASKED=new URLSearchParams(location.search).get('net');
+const NET_NAME=Object.prototype.hasOwnProperty.call(NETS,NET_ASKED)?NET_ASKED:DEFAULT_NET;
+const NET=NETS[NET_NAME]; window.CLIFF_NET=NET_NAME;
+// end network switch
+const RPC=NET.rpc;
+const VEST=NET.vest, TOKEN=NET.token;
+const HOLDER=NET.holder, LENDER=NET.lender;
+const EXP=id=>NET.tx+id;
+const ACC=a=>NET.account+a;
+const TXS=NET_NAME!=='testnet'?[]:[['Deploy the CLIFF token','AUQEhhtP1fXPnAncG3FRSrmw4Eg2njxF3UsbZ43GRp4i'],['Deploy the funded vesting contract','FodJzhEmqR5aHps2dD2ZwRZQn81PiyWmRBjHSQvrPsoZ'],['Issuer funds grant g1 with 365,000 CLIFF','8TVKCRiF8UE1Wp6CfkBreHWWX9Eg6EKWBAZ61TrEg8Ye'],['Issuer funds grant g2 with 120,000 CLIFF','7jtNGFVGfrF7aUY11MXYcE3foDnp9Q58R9KjahuvzkDC'],['Lender deposits 200,000 CLIFF','EQ1x33qSUYYWjRMnBz7oPssfbsxhnQAcNd23tnAN9oup'],['Holder borrows 50,000 against g1','DUPUu5HnfYdiAgqN1eAh67aMeusGfgvS8Bu1KLDZaPYG'],['Unlock: lender paid 52,712 first, holder gets the rest','8f6EsnaSrGAFYiTTgHyjdJErd547hqozsaC9WTLDPir1']];
 const E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=v=>Number(v||0).toLocaleString('en');
 const day=d=>d==null?'none':d+' · '+new Date(d*864e5).toISOString().slice(0,10);
+function notDeployed(j){return j?.error?.cause?.name==='UNKNOWN_ACCOUNT'||/CodeDoesNotExist|does not exist while viewing/.test(String(j?.result?.error||j?.error?.data||''))}
 async function view(contract,method,args){
  const r=await fetch(RPC,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'c',method:'query',params:{request_type:'call_function',finality:'final',account_id:contract,method_name:method,args_base64:btoa(JSON.stringify(args||{}))}})});
- const j=await r.json(); if(j.error||j.result?.error)throw new Error(method+': '+(j.result?.error||j.error.message||'RPC error'));
+ const j=await r.json();
+ if(notDeployed(j)){const e=new Error(contract+' is not deployed yet on NEAR '+NET_NAME+'. The page shows live numbers after the deploy.');e.notDeployed=true;throw e}
+ if(j.error||j.result?.error)throw new Error(method+': '+(j.result?.error||j.error.message||'RPC error'));
  return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 function link(el,a){el.textContent=a;el.href=ACC(a)}
@@ -119,11 +132,12 @@ async function load(holder){
   document.getElementById('bals').innerHTML='<tr><th>Account</th><th>Balance in the contract</th></tr>'+[[holder,hbal],[LENDER,lbal]].map(([a,b])=>`<tr><td><a href="${ACC(a)}" target="_blank" rel="noopener">${E(a)}</a></td><td>${b==null?'not registered':n(b)}</td></tr>`).join('');
   LIVE=op;
   fillGrants();
-  document.getElementById('at').textContent='Read from testnet at '+new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
- }catch(e){document.getElementById('err').textContent='Could not read the chain: '+e.message}
+  document.getElementById('at').textContent='Read from '+NET_NAME+' at '+new Date().toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ }catch(e){document.getElementById('err').textContent=e.notDeployed?'Not deployed yet. '+e.message:'Could not read the chain: '+e.message;if(e.notDeployed)document.getElementById('at').textContent='Not deployed yet on '+NET_NAME}
 }
+document.title='Cliffhanger on NEAR '+NET_NAME;document.querySelectorAll('.netname').forEach(el=>el.textContent=NET_NAME);if(NET_NAME!=='testnet')document.querySelectorAll('.tn-only').forEach(el=>el.hidden=true);
 link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKEN);
-document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>';
+document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+(TXS.length?TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>':'<tr><td colspan="2">No '+NET_NAME+' run is recorded on this page yet.</td></tr>');
 
 const ONECLICK='https://1click.chaindefuser.com/v0/quote';
 const WALLET='https://app.mynearwallet.com/sign';
@@ -312,7 +326,7 @@ async function settle(label){
   if(String(q.amountIn)!==String(plan.amount)) throw new Error('1Click returned a different amount than requested. Nothing was prepared.');
   if(q.depositMemo) throw new Error('This route needs a deposit memo, which this page does not send. Nothing was prepared.');
   const tx=depositTx(kind, refund, q.depositAddress, q.amountIn);
-  const back=location.href.split('?')[0]+'?deposit='+encodeURIComponent(q.depositAddress);
+  const net=new URLSearchParams(location.search||'').get('net'), back=location.href.split('?')[0]+'?'+(net?'net='+encodeURIComponent(net)+'&':'')+'deposit='+encodeURIComponent(q.depositAddress);
   box.innerHTML=`<p>Send <b>${E(q.amountInFormatted)} ${E(plan.unit)}</b> to <a href="https://nearblocks.io/address/${E(q.depositAddress)}" target="_blank" rel="noopener">${E(q.depositAddress)}</a> before ${E(q.timeWhenInactive||q.deadline)}. Nothing has been sent.</p><p><button type="button" id="qsign">Sign the deposit in MyNearWallet</button> · <button type="button" id="qstat">Check status</button></p><div id="qstatout" class="cap"></div>`;
   document.getElementById('qstat').onclick=()=>intentStatus(q.depositAddress);
   document.getElementById('qsign').onclick=async()=>{

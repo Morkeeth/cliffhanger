@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {transaction, executionError, VEST} from './wallet-policy.js';
+import {transaction as tx4, executionError, NETWORKS} from './wallet-policy.js';
+const transaction=(...a)=>tx4('testnet',...a), VEST=NETWORKS.testnet.vest;
 const own='holder.testnet';
 test('signing is tied to the connected holder, testnet, and supported methods',()=>{
   assert.throws(()=>transaction(own,'other.testnet','unlock',{grant_id:'g1'}));
