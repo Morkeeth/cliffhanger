@@ -6,6 +6,7 @@
     "dev": "vite web --config vite.config.js --host 127.0.0.1 --port 8932",
     "build": "vite build web --config vite.config.js --base ./ --outDir ../dist --emptyOutDir",
     "test": "node --experimental-vm-modules --test web/wallet-*.test.js",
+    "verify": "node scripts/verify.mjs",
     "preview": "vite preview web --config vite.config.js --outDir ../dist --host 127.0.0.1 --port 8933 --strictPort"
   },
   "dependencies": {
