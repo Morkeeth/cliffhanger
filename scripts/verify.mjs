@@ -14,11 +14,12 @@ const JSON_OUT = process.argv.includes('--json');
 
 const NETS = {
   testnet: {
-    rpc: ['https://rpc.testnet.near.org', 'https://archival-rpc.testnet.near.org'],
+    // Second provider and the archival node from docs.near.org/api/rpc/providers; old transactions need the archival node.
+    rpc: ['https://rpc.testnet.near.org', 'https://rpc.testnet.fastnear.com', 'https://archival-rpc.testnet.near.org'],
     vest: 'vest.ch11b-iss.testnet', token: 'tok.ch11b-iss.testnet', holder: 'hold.ch11b-hold.testnet',
   },
   mainnet: {
-    rpc: ['https://rpc.mainnet.near.org'],
+    rpc: ['https://rpc.mainnet.near.org', 'https://free.rpc.fastnear.com'],
     vest: 'vest.morkeeth.near', token: 'cliff.morkeeth.near', holder: 'hold.morkeeth.near',
   },
 };
@@ -105,21 +106,34 @@ async function escrowInvariant(net) {
 }
 
 async function agentKeyProof() {
+  // The key check reads current state, so it holds even after old transactions leave the RPC nodes.
+  const { signer } = AGENT_UNLOCK_TX;
+  const vest = NETS.testnet.vest;
+  const list = await rpc('testnet', 'query', { request_type: 'view_access_key_list', finality: 'final', account_id: signer });
+  const agentKeys = list.keys.filter(k => k.access_key.permission?.FunctionCall?.receiver_id === vest);
+  const unlockOnly = agentKeys.filter(k => {
+    const names = k.access_key.permission.FunctionCall.method_names;
+    return names.length === 1 && names[0] === 'unlock';
+  });
+  record(agentKeys.length > 0 && unlockOnly.length === agentKeys.length ? 'PASS' : 'FAIL', 'agent key can only unlock',
+    agentKeys.length
+      ? `${signer} holds ${agentKeys.length} function-call key(s) on ${vest}, each limited to [${agentKeys[0].access_key.permission.FunctionCall.method_names.join(', ')}]; such a key cannot attach a deposit, so withdraw is out of reach`
+      : `${signer} holds no function-call key on ${vest}`);
+  await agentUnlockTx(unlockOnly.map(k => k.public_key));
+}
+
+async function agentUnlockTx(agentPublicKeys) {
   const { hash, signer } = AGENT_UNLOCK_TX;
-  const tx = await rpc('testnet', 'tx', { tx_hash: hash, sender_account_id: signer, wait_until: 'NONE' });
-  const action = tx.transaction.actions[0]?.FunctionCall;
-  const ok = 'SuccessValue' in (tx.status || {});
-  record(ok && action?.method_name === 'unlock' && tx.transaction.receiver_id === NETS.testnet.vest ? 'PASS' : 'FAIL',
-    'agent unlock landed on chain', `tx ${hash.slice(0, 8)}… calls ${action?.method_name} on ${tx.transaction.receiver_id}, deposit ${action?.deposit}`);
-  try {
-    const key = await rpc('testnet', 'query', { request_type: 'view_access_key', finality: 'final', account_id: signer, public_key: tx.transaction.public_key });
-    const fc = key.permission?.FunctionCall;
-    const limited = fc && fc.receiver_id === NETS.testnet.vest && fc.method_names.length === 1 && fc.method_names[0] === 'unlock';
-    record(limited ? 'PASS' : 'FAIL', 'agent key can only unlock',
-      fc ? `key may call [${fc.method_names.join(', ')}] on ${fc.receiver_id}; it cannot attach a deposit, so withdraw is out of reach` : 'signing key is a full-access key');
-  } catch (e) {
-    record('WARN', 'agent key can only unlock', `key no longer on the account (${e.message}); the tx above is the proof`);
+  let tx;
+  try { tx = await rpc('testnet', 'tx', { tx_hash: hash, sender_account_id: signer, wait_until: 'NONE' }); } catch (e) {
+    record('WARN', 'agent unlock landed on chain', `tx ${hash.slice(0, 8)}… not found on any RPC (${e.message}); see TESTNET-E2E.md`);
+    return;
   }
+  const action = tx.transaction.actions[0]?.FunctionCall;
+  const ok = 'SuccessValue' in (tx.status || {}) && action?.method_name === 'unlock' && tx.transaction.receiver_id === NETS.testnet.vest
+    && agentPublicKeys.includes(tx.transaction.public_key);
+  record(ok ? 'PASS' : 'FAIL', 'agent unlock landed on chain',
+    `tx ${hash.slice(0, 8)}… calls ${action?.method_name} on ${tx.transaction.receiver_id}, deposit ${action?.deposit}, signed by ${agentPublicKeys.includes(tx.transaction.public_key) ? 'the unlock-only key' : 'a different key'}`);
 }
 
 async function intentsDryQuote() {
@@ -150,8 +164,9 @@ async function main() {
     }
   }
   const failed = results.filter(r => r.status === 'FAIL').length;
-  if (JSON_OUT) console.log(JSON.stringify({ failed, results }, null, 2));
-  else console.log(`\n${failed ? `${failed} check(s) FAILED` : 'All required checks passed.'} WARN and INFO lines are optional or not yet deployed.`);
+  const warned = results.filter(r => r.status === 'WARN').length;
+  if (JSON_OUT) console.log(JSON.stringify({ failed, warned, results }, null, 2));
+  else console.log(`\n${failed ? `${failed} check(s) FAILED.` : 'No check failed.'} ${warned} WARN (a live check could not run; rerun later). INFO means optional or not deployed yet.`);
   process.exit(failed ? 1 : 0);
 }
 
