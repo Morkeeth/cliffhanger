@@ -26,6 +26,27 @@ A treasury planner shows every choice under three price paths: price falls, hold
 
 Before any mainnet deploy, two independent reviews found six ways the escrow could lose or lock funds. All six are fixed and replayed on chain; the transaction ids are in TESTNET-E2E.md. MAINNET.md is the deploy runbook. The escrow is not on mainnet yet.
 
+## Check it in one command
+
+For a reviewer with a fresh clone and no keys. Node 22 and Python 3.10 or later:
+
+```
+npm ci --ignore-scripts
+npm run verify
+```
+
+You see one line per check, `PASS`, `FAIL`, `WARN`, `INFO` or `SKIP`, and the exit code is 1 if any check fails. Nothing is signed or sent. For a machine-readable report run `npm run -s verify -- --json`. Add `-- --offline` to skip the network.
+
+| Check | What it proves | Where it reads |
+|---|---|---|
+| Wallet and engine tests | The desk, the network switch, the loan, choice, planner and Intents builders behave as specified | `web/*.test.js`, `poc/test_*.py` |
+| Escrow is fully backed | `backing()` equals the escrow's CLIFF balance on the token contract, and no withdrawal is stuck | Live testnet contract over public RPC |
+| Agent payday | The recorded agent unlock succeeded on chain, and the key that signed it may call `unlock` on the escrow and nothing else | Testnet transaction and the key's permission, read from chain |
+| Mainnet escrow | The same backing checks on `vest.morkeeth.near`, or `INFO not deployed` until it is | Mainnet RPC |
+| NEAR Intents | A dry 1Click quote, 1 NEAR to USDC on Base, with no funds and no deposit address | 1Click API; `WARN` if unreachable |
+
+The Rust contract tests are not run by this command because they compile for minutes. Run `cd contract && cargo test` for those.
+
 ## Wallet desk locally
 
 Node 22 is required (`nvm use` reads `.nvmrc`):
