@@ -73,10 +73,10 @@ a{color:var(--you);text-underline-offset:3px}
 <div id="qsettle"></div>
 
 <h2>More vesting shapes, local only</h2>
-<div class="cap">The funded contract still holds the two CLIFF grants above. These rows match the local demo: a cliff, a grant already vesting, a finished grant, a cancellable grant, and three AURORA schedules with tokens already vested. They are not on chain. Minting more CLIFF needs the issuer key, which this page does not have. Choose one in the quote above.</div>
+<div class="cap">The funded contract holds the CLIFF grant above. These rows match the local demo: a cliff, a grant already vesting, a finished grant, a cancellable grant, and three AURORA schedules with tokens already vested. They are not on chain. Minting more CLIFF needs the issuer key, which this page does not have. Choose one in the quote above.</div>
 <div class="tw"><table id="book"></table></div>
 
-<h2>The end-to-end run, 8 November</h2>
+<h2>The live run on this contract, 12 November: agent payday</h2>
 <div class="tw"><table id="txs"></table></div>
 
 <div class="notes">
@@ -107,7 +107,7 @@ const VEST=NET.vest, TOKEN=NET.token;
 const HOLDER=NET.holder, LENDER=NET.lender;
 const EXP=id=>NET.tx+id;
 const ACC=a=>NET.account+a;
-const TXS=NET_NAME!=='testnet'?[]:[['Deploy the CLIFF token','AUQEhhtP1fXPnAncG3FRSrmw4Eg2njxF3UsbZ43GRp4i'],['Deploy the funded vesting contract','FodJzhEmqR5aHps2dD2ZwRZQn81PiyWmRBjHSQvrPsoZ'],['Issuer funds grant g1 with 365,000 CLIFF','8TVKCRiF8UE1Wp6CfkBreHWWX9Eg6EKWBAZ61TrEg8Ye'],['Issuer funds grant g2 with 120,000 CLIFF','7jtNGFVGfrF7aUY11MXYcE3foDnp9Q58R9KjahuvzkDC'],['Lender deposits 200,000 CLIFF','EQ1x33qSUYYWjRMnBz7oPssfbsxhnQAcNd23tnAN9oup'],['Holder borrows 50,000 against g1','DUPUu5HnfYdiAgqN1eAh67aMeusGfgvS8Bu1KLDZaPYG'],['Unlock: lender paid 52,712 first, holder gets the rest','8f6EsnaSrGAFYiTTgHyjdJErd547hqozsaC9WTLDPir1']];
+const TXS=NET_NAME!=='testnet'?[]:[['Deploy and init the CLIFF token','9GPCKUjRb2dFfs46eUEtG58mayQrwumZF3Cv8zFV7688'],['Deploy and init this vesting contract','HFRHxJoPnub29xFNW3TCjbH57GS5G9WebRedmSPYeDFw'],['Holder borrows 50,000 from the lender\'s offer','4WGnArRnwKhVUGZKzwqMco79cwXy4qZHnqrSEDsL71vh'],['Holder gives an agent a key that can only call unlock','BXG7955dy8yw5cQJWEyRkqyDMVrfGN6xPNvuDFUL8rYD'],['Agent unlocks g1: the lender is repaid first, then the holder is credited (balances after: lender 202,712, holder 197,288)','GkFcibJsrHr6xTe87nh1LcwBWSwJyPWeNYQcNFUcke74'],['Holder withdraws 197,288 CLIFF with a wallet-confirmed transaction','8VLqxQgcNSc9EjsyJdCB5RjyRq8jVvp7ex7hce9w8Hyb']];
 const E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const n=v=>Number(v||0).toLocaleString('en');
 const day=d=>d==null?'none':d+' · '+new Date(d*864e5).toISOString().slice(0,10);
@@ -137,7 +137,7 @@ async function load(holder){
 }
 document.title='Cliffhanger on NEAR '+NET_NAME;document.querySelectorAll('.netname').forEach(el=>el.textContent=NET_NAME);if(NET_NAME!=='testnet')document.querySelectorAll('.tn-only').forEach(el=>el.hidden=true);
 link(document.getElementById('cl'),VEST);link(document.getElementById('tl'),TOKEN);
-document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+(TXS.length?TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Holder withdraws 197,288 CLIFF to own wallet</td><td class="cap">see the holder wallet figure above</td></tr>':'<tr><td colspan="2">No '+NET_NAME+' run is recorded on this page yet.</td></tr>');
+document.getElementById('txs').innerHTML='<tr><th>Step</th><th>Transaction</th></tr>'+(TXS.length?TXS.map(([t,id])=>`<tr><td>${E(t)}</td><td><a href="${EXP(id)}" target="_blank" rel="noopener">${id.slice(0,10)}…</a></td></tr>`).join('')+'<tr><td>Refused: the agent key tries to withdraw</td><td class="cap">NEAR rejects it: the key only allows unlock and cannot attach a deposit</td></tr>':'<tr><td colspan="2">No '+NET_NAME+' run is recorded on this page yet.</td></tr>');
 
 const ONECLICK='https://1click.chaindefuser.com/v0/quote';
 const WALLET='https://app.mynearwallet.com/sign';

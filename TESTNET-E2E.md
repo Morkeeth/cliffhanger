@@ -44,7 +44,7 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 - **Build:** Rust 1.86 with cargo-near 0.23.
 
 ## Not done
-- **Agent key:** a function-call key on the holder, limited to `unlock, withdraw, borrow, repay, sell_slice` on the vesting contract, so an agent can act and cannot touch the rest of the wallet. Not created yet.
+- **Agent key:** a function-call key on the holder, limited to `unlock, withdraw, borrow, repay, sell_slice` on the vesting contract, so an agent can act and cannot touch the rest of the wallet. Not created in this pass; created on 12 Nov with `unlock` only, see Agent payday below.
 - **Hosted desk:** `web/index.html` reads these accounts from the testnet RPC. A live choice uses the grant's remaining term for the OFFX discount, then a dry NEAR Intents quote. Prepare deposit asks 1Click for one deposit address and a MyNearWallet transfer of NEAR or AURORA. The vesting contract stays on testnet and does not send that deposit. https://morkeeth.github.io/cliffhanger/ updates when this file is merged; this change does not deploy or merge.
 
 # Hardened contract on testnet (11 Nov 2026)
@@ -53,7 +53,7 @@ An independent review found three ways to lose funds and one init race. A second
 
 ## What changed in the contract
 - **Consent.** A holder can borrow or sell a slice only from an account that offered. Lenders and buyers deposit with `{"action":"offer"}` or call `set_lendable`. Before, a holder could name any account and take its balance.
-- **Wallet confirmation.** `borrow`, `sell_slice`, `repay`, `cancel`, `unlock`, `withdraw`, `create_grant`, `unstake` and `set_lendable` need exactly 1 yoctoNEAR, so a leaked function-call key cannot move value.
+- **Wallet confirmation.** `borrow`, `sell_slice`, `repay`, `cancel`, `unlock`, `withdraw`, `create_grant`, `unstake` and `set_lendable` need exactly 1 yoctoNEAR, so a leaked function-call key cannot move value. (On 12 Nov `unlock` dropped this requirement so an agent can run payday; see Agent payday below.)
 - **No permanent lock.** Settled transfers are pruned, so unlocks keep working after 128 of them. Before, the 129th unlock failed for everyone. An empty wallet that nothing refers to can give up its slot. A wallet with a withdrawal in flight is never evicted, so a failed transfer is always restored.
 - **Init race.** The token and the vesting contract can be initialized only by their own account, inside the deploy transaction.
 

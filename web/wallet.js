@@ -30,7 +30,7 @@ function prepare(method, args) {
     if (!available()) throw new Error('Refresh your connected account first.');
     pending = transaction(NET.id, account, snapshot.holder, method, args);
     if (method === 'withdraw' && BigInt(args.amount) > BigInt(snapshot.balance || 0)) throw new Error('Amount exceeds your balance inside Cliffhanger.');
-    $('wallet-preview').textContent = `${method === 'unlock' ? 'Unlock ' + args.grant_id + ' into your Cliffhanger balance (lender or buyer paid first)' : 'Withdraw ' + args.amount + ' CLIFF to ' + account}. Contract: ${NET.vest}. Gas: up to 100 Tgas. Attached NEAR: 0. Confirming requests a signature from your connected ${NET.id} wallet.`;
+    $('wallet-preview').textContent = `${method === 'unlock' ? 'Unlock ' + args.grant_id + ' into your Cliffhanger balance (lender or buyer paid first)' : 'Withdraw ' + args.amount + ' CLIFF to ' + account}. Contract: ${NET.vest}. Gas: up to 100 Tgas. ${method === 'withdraw' ? 'Attached: 1 yoctoNEAR, the wallet confirmation that an agent key cannot give.' : 'Attached NEAR: 0, so an unlock-only agent key can sign it too.'} Confirming requests a signature from your connected ${NET.id} wallet.`;
     $('wallet-confirm').hidden = false;
   } catch (e) { reset(); say(e.message); }
 }

@@ -62,7 +62,7 @@ Open http://127.0.0.1:8932, click **Connect testnet wallet**, then **Read my acc
 
 ## Try it: do X, see Y
 
-Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unknown-unknown` target.
+Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unknown-unknown` target. The `near contract` commands further down need near-cli-rs (0.31.1 tested) and are optional: `npm run verify` reads the same on-chain values with no CLI and no keys.
 
 1. Run the engine and planner tests.
    ```
@@ -91,14 +91,14 @@ Requirements: Python 3.10 or later. For the contract: Rust with the `wasm32-unkn
    cd ../contract
    cargo test
    ```
-   You see 53 tests pass. To build the deployable WASM, see contract/README.md.
+   You see 54 tests pass. To build the deployable WASM, see contract/README.md.
 
 6. Open the on-chain page.
    Run `npm run dev` from the repository root and open http://127.0.0.1:8932 (opening the file directly does not load the wallet modules). It reads the live testnet contract directly: what the contract owes, what it holds, the holder's grants and what they can do today. Choose a live grant or a local row, then a choice. A dry quote prices three routes. Prepare deposit, on one route, asks 1Click for a deposit address and offers a MyNearWallet transfer. A CLIFF choice sends NEAR. A local AURORA row sends AURORA. The sale uses the OFFX discount for the months still left (`term_days` on a live grant). The table under the quote is the local book, not extra tokens on the contract.
 
 ## On NEAR testnet
 
-The contract runs on testnet at `cliffhanger-demo-8nov.testnet`, seeded with the same two demo grants. Read them yourself:
+The contract judges should check is the funded one, `vest.ch11b-iss.testnet` (next section, or `npm run verify`). An older synthetic demo contract also runs on testnet at `cliffhanger-demo-8nov.testnet`, seeded with the same two demo grants. Read them yourself:
 ```
 near contract call-function as-read-only cliffhanger-demo-8nov.testnet get_grants json-args '{"account_id":"alice.cliffhanger-demo-8nov.testnet"}' network-config testnet now
 ```
@@ -108,7 +108,7 @@ Build for deploy: `cargo near build non-reproducible-wasm --no-abi` with Rust 1.
 
 ### Real tokens, end to end
 
-The live funded contract is `vest.ch11b-iss.testnet`, holding CLIFF from `tok.ch11b-iss.testnet`. The first run, before the hardening, used `cliffhanger-vest-8nov.testnet`; both are in TESTNET-E2E.md. In the live contract:
+The live funded contract is `vest.ch11b-iss.testnet`, holding CLIFF from `tok.ch11b-iss.testnet`. The first run, before the hardening, used `cliffhanger-vest-8nov.testnet`, and the hardened run of 11 Nov used `ch11b-vest.testnet`; all three runs are in TESTNET-E2E.md. In the live contract:
 - an issuer funds a grant by sending tokens;
 - a lender deposits;
 - the holder borrows, unlocks (the lender is paid first) and withdraws to their own wallet.
@@ -134,6 +134,7 @@ You see the same number twice. Every transaction is listed in TESTNET-E2E.md.
 
 - **NEAR Intents payout.** Intents runs on mainnet only, with no testnet. The demo and the on-chain page price a choice with a dry quote, then Prepare deposit asks 1Click for one deposit address. A CLIFF choice is funded with NEAR. A vested AURORA grant is funded with AURORA. The holder signs that transfer in MyNearWallet: the page reads the account's full-access key and a fresh block, then opens the wallet with the unsigned transaction. Aurora's own chain is not in the live token list, so the page does not invent a route there. Stake is not a swap: it pays demo rewards. The page does not broadcast the transfer. The vesting contract is not on mainnet: the escrow is unaudited, and it is not the account that pays Intents.
 - **Browser wallet journey.** The desk is live with testnet MyNearWallet connect, unlock and withdrawal. Automated controller checks pass; a real browser wallet signature and receipt are not yet recorded. Borrow and sell are signed with the NEAR CLI, as in the proof script.
+- **A sale recorded on chain.** Selling a slice is in the contract and its tests, and testnet refuses a sale to a buyer who never offered (TESTNET-E2E.md). Borrowing is the choice with a recorded on-chain run; a successful sale transaction is not recorded yet.
 - **A real staking pool.** The demo contract mints demo rewards. The funded contract refuses to stake, because those rewards would have no tokens behind them.
 
 ## Layout
