@@ -1,7 +1,7 @@
 // Wallet side of the network switch. The page script picks the network (DEFAULT_NET or ?net=) and passes it here.
 // Contract names must match NETS in web/index.html and docs/index.html; wallet-network.test.js checks it.
 export const NETWORKS = {
-  testnet: { id: 'testnet', vest: 'vest.ch11b-iss.testnet', suffix: '.testnet', walletUrl: 'https://testnet.mynearwallet.com', rpc: 'https://rpc.testnet.near.org', tx: 'https://explorer.testnet.near.org/transactions/' },
+  testnet: { id: 'testnet', vest: 'vest.ch11b-iss.testnet', suffix: '.testnet', walletUrl: 'https://testnet.mynearwallet.com', rpc: 'https://rpc.testnet.fastnear.com', tx: 'https://explorer.testnet.near.org/transactions/' },
   mainnet: { id: 'mainnet', vest: 'vest.morkeeth.near', suffix: '.near', walletUrl: 'https://app.mynearwallet.com', rpc: 'https://rpc.mainnet.near.org', tx: 'https://nearblocks.io/txns/' },
 };
 export function network(name) {

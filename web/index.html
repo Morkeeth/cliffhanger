@@ -103,14 +103,14 @@ a{color:var(--you);text-underline-offset:3px}
 // Network switch. Testnet is the default. ?net=mainnet reads mainnet. To make mainnet the default, change the next line only.
 const DEFAULT_NET='testnet';
 const NETS={
- testnet:{rpc:'https://rpc.testnet.near.org',vest:'vest.ch11b-iss.testnet',token:'tok.ch11b-iss.testnet',holder:'hold.ch11b-hold.testnet',lender:'lend.ch11b-hold.testnet',tx:'https://explorer.testnet.near.org/transactions/',account:'https://explorer.testnet.near.org/accounts/'},
- mainnet:{rpc:'https://rpc.mainnet.near.org',vest:'vest.morkeeth.near',token:'cliff.morkeeth.near',holder:'hold.morkeeth.near',lender:'lend.morkeeth.near',tx:'https://nearblocks.io/txns/',account:'https://nearblocks.io/address/'}
+ testnet:{rpc:'https://rpc.testnet.fastnear.com',rpc2:'https://rpc.testnet.near.org',vest:'vest.ch11b-iss.testnet',token:'tok.ch11b-iss.testnet',holder:'hold.ch11b-hold.testnet',lender:'lend.ch11b-hold.testnet',tx:'https://explorer.testnet.near.org/transactions/',account:'https://explorer.testnet.near.org/accounts/'},
+ mainnet:{rpc:'https://rpc.mainnet.near.org',rpc2:'https://rpc.mainnet.fastnear.com',vest:'vest.morkeeth.near',token:'cliff.morkeeth.near',holder:'hold.morkeeth.near',lender:'lend.morkeeth.near',tx:'https://nearblocks.io/txns/',account:'https://nearblocks.io/address/'}
 };
 const NET_ASKED=new URLSearchParams(location.search).get('net');
 const NET_NAME=Object.prototype.hasOwnProperty.call(NETS,NET_ASKED)?NET_ASKED:DEFAULT_NET;
 const NET=NETS[NET_NAME]; window.CLIFF_NET=NET_NAME;
 // end network switch
-const RPC=NET.rpc;
+const RPC=NET.rpc, RPC2=NET.rpc2;
 const VEST=NET.vest, TOKEN=NET.token;
 const HOLDER=NET.holder, LENDER=NET.lender;
 const EXP=id=>NET.tx+id;
@@ -121,7 +121,12 @@ const n=v=>Number(v||0).toLocaleString('en');
 const day=d=>d==null?'none':d+' · '+new Date(d*864e5).toISOString().slice(0,10);
 function notDeployed(j){return j?.error?.cause?.name==='UNKNOWN_ACCOUNT'||/CodeDoesNotExist|does not exist while viewing/.test(String(j?.result?.error||j?.error?.data||''))}
 async function view(contract,method,args){
- const r=await fetch(RPC,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'c',method:'query',params:{request_type:'call_function',finality:'final',account_id:contract,method_name:method,args_base64:btoa(JSON.stringify(args||{}))}})});
+ const req={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'c',method:'query',params:{request_type:'call_function',finality:'final',account_id:contract,method_name:method,args_base64:btoa(JSON.stringify(args||{}))}})};
+ // Public RPCs rate-limit busy pages (429 without CORS reads as 'Failed to fetch'), so a second provider answers when the first does not.
+ const backup=typeof RPC2==='string'&&RPC2;
+ let r;
+ try{r=await fetch(RPC,req)}catch(e){if(!backup)throw e}
+ if(backup&&(!r||r.status===429||r.status>=500))r=await fetch(backup,req);
  const j=await r.json();
  if(notDeployed(j)){const e=new Error(contract+' is not deployed yet on NEAR '+NET_NAME+'. The page shows live numbers after the deploy.');e.notDeployed=true;throw e}
  if(j.error||j.result?.error)throw new Error(method+': '+(j.result?.error||j.error.message||'RPC error'));
