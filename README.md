@@ -19,12 +19,12 @@ A treasury planner shows every choice under three price paths: price falls, hold
 | Piece | What is real |
 |---|---|
 | Escrow contract (Rust, near-sdk) | On testnet. Grants arrive by NEP-141 `ft_transfer_call`. Each unlock pays the lender or buyer first, then credits the holder. `backing()` equals the contract's token balance after every step. |
-| Agent payday | The holder can give an agent a function-call key limited to `unlock`. The agent releases vested tokens on schedule. It cannot withdraw: every other money move needs a 1 yoctoNEAR wallet confirmation, which a function-call key cannot attach. Proven on testnet, see TESTNET-E2E.md. |
+| Agent payday | The holder can give an agent a function-call key limited to `unlock`. The agent can release each vesting payday without the holder; one agent unlock is recorded on testnet. The repository ships no scheduler, so the agent decides when to call. It cannot withdraw: every other money move needs a 1 yoctoNEAR wallet confirmation, which a function-call key cannot attach. Proven on testnet, see TESTNET-E2E.md. |
 | NEAR Intents (1Click) | Mainnet. Dry quotes price a choice. Prepare deposit gets one deposit address and opens MyNearWallet with the transfer: send NEAR or AURORA, receive AURORA on NEAR or Ethereum, or USDC on Base. The page never broadcasts; the holder signs. |
 | Wallet | Testnet MyNearWallet connect, unlock and withdraw on the escrow; mainnet MyNearWallet for the Intents deposit. |
 | CLIFF token | A NEP-141 demo token with no value and fixed supply. |
 
-Before any mainnet deploy, two independent reviews found six ways the escrow could lose or lock funds. All six are fixed and replayed on chain; the transaction ids are in TESTNET-E2E.md. MAINNET.md is the deploy runbook. The escrow is not on mainnet yet.
+Before any mainnet deploy, two independent reviews found six ways the escrow could lose or lock funds. All six are fixed and covered by contract tests, and the hardened contract was replayed end to end on testnet; the transaction ids are in TESTNET-E2E.md. MAINNET.md is the deploy runbook. The escrow is not on mainnet yet.
 
 ## Check it in one command
 

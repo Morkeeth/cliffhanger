@@ -39,7 +39,7 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 
 ## Code
 - **Contract:** `new_funded`, `ft_on_transfer`, `unlock`, `withdraw` with a callback that restores the balance on failure, and `backing`.
-- **Tests:** 43 cargo tests pass (35 earlier and 8 new funded tests). 4 mutants were all caught: withdraw keeps supply, unauthenticated restore, any token can deposit, lender leg skipped.
+- **Tests:** at the time of this 8 Nov pass, 43 cargo tests passed (35 earlier and 8 new funded tests). Main now has 54 (README step 5). 4 mutants were all caught: withdraw keeps supply, unauthenticated restore, any token can deposit, lender leg skipped.
 - **Token:** `token/` (near-contract-standards 5.17.2).
 - **Build:** Rust 1.86 with cargo-near 0.23.
 
@@ -49,7 +49,7 @@ The fee figure is from the engine: 50,000 at 12% a year over a 165-day term is 2
 
 # Hardened contract on testnet (11 Nov 2026)
 
-An independent review found three ways to lose funds and one init race. A second review (Codex) found a stranded-withdrawal case and an unguarded unlock. All six are fixed, and this run proves the fixes on chain. New faucet accounts, keys in the macOS keychain. Reproduce with `scripts/deploy-and-prove.sh`.
+An independent review found three ways to lose funds and one init race. A second review (Codex) found a stranded-withdrawal case and an unguarded unlock. All six are fixed and covered by contract tests. This run replays the hardened contract on chain, including the refusals below. New faucet accounts, keys in the macOS keychain. Reproduce with `scripts/deploy-and-prove.sh`.
 
 ## What changed in the contract
 - **Consent.** A holder can borrow or sell a slice only from an account that offered. Lenders and buyers deposit with `{"action":"offer"}` or call `set_lendable`. Before, a holder could name any account and take its balance.
